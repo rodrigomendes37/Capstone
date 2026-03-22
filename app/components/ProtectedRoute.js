@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { supabase } from "../../supabase"; // path relative to app/components
+import { ActivityIndicator, View } from "react-native";
+import { supabase } from "../../lib/services/supabase"; // path relative to app/components
 
 export default function ProtectedRoute({ children }) {
   const router = useRouter();
@@ -8,7 +9,10 @@ export default function ProtectedRoute({ children }) {
   const [session, setSession] = useState(null);
 
   useEffect(() => {
+    let mounted = true;
+
     supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
       setSession(data.session);
       setIsLoading(false);
     });
@@ -16,18 +20,30 @@ export default function ProtectedRoute({ children }) {
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
-      }
+        setIsLoading(false);
+        if (!session) router.replace("/login");
+      },
     );
 
-    return () => listener.subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [router]);
 
   useEffect(() => {
-    if (!isLoading && session === null) {
+    if (!isLoading && !session) {
       router.replace("/login"); // lowercase!
     }
   }, [isLoading, session, router]);
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
   return session ? children : null;
 }

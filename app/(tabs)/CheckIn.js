@@ -2,17 +2,18 @@
 import Slider from "@react-native-community/slider";
 import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Pressable,
 } from "react-native";
-import { supabase } from "../../supabase";
+import { supabase } from "../../lib/services/supabase";
+import { useRole } from "../../lib/utils/useRole";
 
 export default function CheckInScreen() {
   const router = useRouter();
@@ -22,6 +23,58 @@ export default function CheckInScreen() {
   const [sorenessLevel, setSorenessLevel] = useState(0);
   const [mood, setMood] = useState(50);
   const [comments, setComments] = useState("");
+
+  const { role, loadingRole } = useRole();
+  const isCoach = role === "coach";
+
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [athleteRows, setAthleteRows] = useState([]); // [{ user_id }]
+  const [todayCheckins, setTodayCheckins] = useState([]); // [{ user_id, created_at }]
+
+  useEffect(() => {
+    if (loadingRole) return;
+    if (!isCoach) return;
+
+    async function loadCoachView() {
+      setCoachLoading(true);
+
+      // 1) athletes list (from profiles)
+      const { data: athletes, error: athletesErr } = await supabase
+        .from("profiles")
+        .select("user_id, role")
+        .eq("role", "athlete");
+
+      if (athletesErr) {
+        console.log("Load athletes error:", athletesErr);
+        setCoachLoading(false);
+        return;
+      }
+
+      // 2) checkins submitted "today"
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+
+      const { data: checkins, error: checkinsErr } = await supabase
+        .from("checkins")
+        .select("user_id, created_at")
+        .gte("created_at", start.toISOString())
+        .lte("created_at", end.toISOString());
+
+      if (checkinsErr) {
+        console.log("Load checkins error:", checkinsErr);
+        setCoachLoading(false);
+        return;
+      }
+
+      setAthleteRows(athletes || []);
+      setTodayCheckins(checkins || []);
+      setCoachLoading(false);
+    }
+
+    loadCoachView();
+  }, [loadingRole, isCoach]);
 
   const today = new Date();
   const dateString = today.toLocaleDateString("en-US", {
@@ -57,7 +110,6 @@ export default function CheckInScreen() {
         return;
       }
 
-
       const { error } = await supabase.from("checkins").insert({
         hours_of_sleep: parseInt(hoursOfSleep) || 0,
         sleep_quality: parseInt(sleepQuality) || 0,
@@ -72,7 +124,6 @@ export default function CheckInScreen() {
         console.log("Error inserting check-in:", error);
         alert("Check-in failed: " + JSON.stringify(error));
         return;
-
       }
 
       console.log("Check-in submitted!");
@@ -107,6 +158,79 @@ export default function CheckInScreen() {
       ))}
     </View>
   );
+
+  if (loadingRole) return null;
+
+  if (isCoach) {
+    const submittedSet = new Set((todayCheckins || []).map((c) => c.user_id));
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <ArrowLeft size={24} />
+            </TouchableOpacity>
+            <Text style={styles.title}>Check-Ins</Text>
+            <View style={{ width: 24 }} />
+          </View>
+          <Text style={styles.dateText}>{dateString}</Text>
+        </View>
+
+        <ScrollView style={styles.scrollContent}>
+          <View style={styles.section}>
+            <Text style={styles.label}>Daily Status (Athletes)</Text>
+            <Text style={{ color: "#6B7280", marginBottom: 12 }}>
+              Shows who submitted a check-in today.
+            </Text>
+
+            {coachLoading ? (
+              <Text>Loading...</Text>
+            ) : (
+              athleteRows.map((a) => {
+                const ok = submittedSet.has(a.user_id);
+                return (
+                  <View
+                    key={a.user_id}
+                    style={{
+                      backgroundColor: "white",
+                      borderWidth: 1,
+                      borderColor: "#E5E7EB",
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 10,
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontWeight: "600" }}>
+                      Athlete {String(a.user_id).slice(0, 8)}…
+                    </Text>
+
+                    <Text
+                      style={{
+                        fontWeight: "700",
+                        color: ok ? "#22C55E" : "crimson",
+                      }}
+                    >
+                      {ok ? "✅ Submitted" : "❌ Missing"}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+
+            {!coachLoading && athleteRows.length === 0 && (
+              <Text style={{ color: "#6B7280" }}>
+                No athletes found in profiles yet.
+              </Text>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

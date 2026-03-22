@@ -1,8 +1,21 @@
 // @ts-nocheck
 import { useRouter } from "expo-router";
-import { BookOpen, Calendar, ChevronRight, ClipboardCheck } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import ProtectedRoute from '../components/ProtectedRoute';
+import {
+  BookOpen,
+  Calendar,
+  ChevronRight,
+  ClipboardCheck,
+} from "lucide-react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { supabase } from "../../lib/services/supabase";
+import { useRole } from "../../lib/utils/useRole";
+import ProtectedRoute from "../components/ProtectedRoute";
 
 // Temporary demo data
 const todaysEvents = [
@@ -16,6 +29,7 @@ const todaysWorkout = { title: "Strength Training", time: "5:00 PM" };
 function HomeScreen() {
   const router = useRouter();
   const dateString = new Date().toDateString();
+  const { role, loadingRole } = useRole();
 
   return (
     <View style={styles.container}>
@@ -24,9 +38,32 @@ function HomeScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Home</Text>
           <Text style={styles.headerSubtitle}>
-            Welcome back! Choose an option below
+            {role
+              ? `Logged in as ${role}`
+              : "Welcome back! Choose an option below"}
           </Text>
         </View>
+
+        {/*COACH DASHBOARD*/}
+        {!loadingRole && role === "coach" && (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push("/(tabs)/CoachDashboard")}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.iconPurple}>
+                  <ClipboardCheck size={28} color="#8B5CF6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Coach Dashboard</Text>
+                  <Text style={styles.cardSubtitle}>
+                    Review athlete check-ins & logs
+                  </Text>
+                </View>
+                <ChevronRight size={20} color="#9CA3AF" />
+              </View>
+            </TouchableOpacity>
+        )}
 
         {/* CALENDAR CARD */}
         <TouchableOpacity
@@ -96,6 +133,21 @@ function HomeScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={async () => {
+            await supabase.auth.signOut();
+          }}
+          style={{
+            alignSelf: "flex-end",
+            padding: 10,
+            borderRadius: 8,
+            borderWidth: 1,
+            marginBottom: 10,
+          }}
+        >
+          <Text>Sign Out</Text>
+        </TouchableOpacity>
+
         {/* WEEKLY STATS */}
         <View style={styles.statsCard}>
           <Text style={styles.statsTitle}>This Week</Text>
@@ -144,20 +196,50 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
   },
   cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  iconBlue: { backgroundColor: "#EFF6FF", padding: 12, borderRadius: 12, marginRight: 10 },
-  iconGreen: { backgroundColor: "#ECFDF5", padding: 12, borderRadius: 12, marginRight: 10 },
-  iconPurple: { backgroundColor: "#F5F3FF", padding: 12, borderRadius: 12, marginRight: 10 },
+  iconBlue: {
+    backgroundColor: "#EFF6FF",
+    padding: 12,
+    borderRadius: 12,
+    marginRight: 10,
+  },
+  iconGreen: {
+    backgroundColor: "#ECFDF5",
+    padding: 12,
+    borderRadius: 12,
+    marginRight: 10,
+  },
+  iconPurple: {
+    backgroundColor: "#F5F3FF",
+    padding: 12,
+    borderRadius: 12,
+    marginRight: 10,
+  },
   cardTitle: { fontSize: 18, fontWeight: "500" },
   cardSubtitle: { color: "#6B7280", fontSize: 13 },
-  eventsContainer: { marginLeft: 12, borderLeftWidth: 2, borderLeftColor: "#BFDBFE", paddingLeft: 10 },
+  eventsContainer: {
+    marginLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: "#BFDBFE",
+    paddingLeft: 10,
+  },
   eventRow: { flexDirection: "row", marginBottom: 6 },
   eventTime: { color: "#6B7280", width: 70, fontSize: 12 },
   eventTitle: { fontSize: 14 },
-  workoutBox: { backgroundColor: "#F5F3FF", padding: 12, borderRadius: 12, marginTop: 8 },
+  workoutBox: {
+    backgroundColor: "#F5F3FF",
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
   workoutBoxTitle: { color: "#7C3AED", fontSize: 12 },
   workoutName: { fontSize: 15, marginTop: 2 },
   workoutTime: { fontSize: 12, color: "#6B7280" },
-  statsCard: { backgroundColor: "#1F2937", padding: 20, borderRadius: 16, marginBottom: 30 },
+  statsCard: {
+    backgroundColor: "#1F2937",
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 30,
+  },
   statsTitle: { color: "white", fontSize: 16, marginBottom: 12 },
   statsRow: { flexDirection: "row", justifyContent: "space-between" },
   statNumber: { fontSize: 20, color: "white" },

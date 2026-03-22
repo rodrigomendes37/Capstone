@@ -1,58 +1,189 @@
 // @ts-nocheck
+import { useRouter } from "expo-router";
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router"; // <-- added
+import { supabase } from "../../lib/services/supabase";
+import { useRole } from "../../lib/utils/useRole";
+import { useTeam } from "../../lib/utils/useTeam";
 
 export default function CalendarScreen() {
-  const router = useRouter(); // <-- added
+  const router = useRouter();
+
+  // ALL state hooks first
   const [selectedDay, setSelectedDay] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // Mock events
-  const events = {
-    12: [
-      { time: "09:00 AM", title: "Morning Workout", hour: 9, duration: 1 },
-      { time: "02:00 PM", title: "Team Meeting", hour: 14, duration: 1 },
-    ],
-    15: [
-      { time: "10:00 AM", title: "Cardio Session", hour: 10, duration: 1.5 },
-    ],
-    18: [
-      { time: "08:00 AM", title: "Yoga Class", hour: 8, duration: 1 },
-      { time: "05:30 PM", title: "Strength Training", hour: 17, duration: 2 },
-    ],
-    22: [
-      { time: "07:00 AM", title: "Running", hour: 7, duration: 0.5 },
-      { time: "12:00 PM", title: "Lunch & Learn", hour: 12, duration: 1 },
-      { time: "04:00 PM", title: "HIIT Workout", hour: 16, duration: 1 },
-    ],
-    25: [
-      { time: "09:30 AM", title: "Personal Training", hour: 9, duration: 1 },
-    ],
-  };
+  const [eventScope, setEventScope] = useState("personal");
+  const [newTitle, setNewTitle] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [newHour, setNewHour] = useState("8");
+  const [newDuration, setNewDuration] = useState("1");
+
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+
+  const { role, loadingRole } = useRole();
+  const { teamId, loadingTeam } = useTeam();
+  const isCoach = role === "coach";
+
+  const eventsByDay = useMemo(() => {
+    const map = {};
+
+    for (const event of calendarEvents) {
+      const day = new Date(event.event_date + "T00:00:00").getDate();
+      if (!map[day]) map[day] = [];
+      map[day].push(event);
+    }
+
+    return map;
+  }, [calendarEvents]);
+
+  async function loadCalendarEvents() {
+    setEventsLoading(true);
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) {
+      setCalendarEvents([]);
+      setEventsLoading(false);
+      return;
+    }
+
+    let query = supabase
+      .from("calendar_events")
+      .select("*")
+      .order("event_date", { ascending: true })
+      .order("hour", { ascending: true });
+
+    if (isCoach) {
+      // coach sees own personal events + all team events
+      query = query.or(
+        `created_by.eq.${user.id},and(scope.eq.team,team_id.eq.${teamId})`,
+      );
+    } else {
+      // athlete sees own personal events + all team events
+      query = query.or(
+        `created_by.eq.${user.id},and(scope.eq.team,team_id.eq.${teamId})`,
+      );
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.log("Load calendar events error:", error);
+      setCalendarEvents([]);
+    } else {
+      setCalendarEvents(data || []);
+    }
+
+    setEventsLoading(false);
+  }
+
+  useEffect(() => {
+    if (!teamId) return;
+    loadCalendarEvents();
+  }, [teamId, role]);
+
+  if (loadingRole || loadingTeam) return null;
 
   const monthName = currentMonth.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
   });
 
+  async function addEventToDay(day) {
+    const hourNum = Number(newHour);
+    const durNum = Number(newDuration);
+
+    if (
+      !day ||
+      !newTitle.trim() ||
+      !newTime.trim() ||
+      Number.isNaN(hourNum) ||
+      Number.isNaN(durNum)
+    ) {
+      return;
+    }
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) return;
+
+    // athletes cannot create team events
+    const finalScope = !isCoach ? "personal" : eventScope;
+
+    const eventDate = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      day,
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    const payload = {
+      team_id: finalScope === "team" ? teamId : null,
+      created_by: user.id,
+      scope: finalScope,
+      title: newTitle.trim(),
+      event_date: eventDate,
+      time_label: newTime.trim(),
+      hour: hourNum,
+      duration: durNum,
+    };
+
+    const { error } = await supabase.from("calendar_events").insert(payload);
+
+    if (error) {
+      console.log("Add calendar event error:", error);
+      return;
+    }
+
+    setNewTitle("");
+    setNewTime("");
+    setNewHour("8");
+    setNewDuration("1");
+
+    await loadCalendarEvents();
+  }
+
+  async function removeEvent(id) {
+    const { error } = await supabase
+      .from("calendar_events")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.log("Remove calendar event error:", error);
+      return;
+    }
+
+    await loadCalendarEvents();
+  }
+
   // Calendar calculations
   const firstDay = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth(),
-    1
+    1,
   );
   const lastDay = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth() + 1,
-    0
+    0,
   );
   const daysInMonth = lastDay.getDate();
   const startingDayOfWeek = firstDay.getDay();
@@ -73,13 +204,13 @@ export default function CalendarScreen() {
 
   const goToPreviousMonth = () => {
     setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1)
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1),
     );
   };
 
   const goToNextMonth = () => {
     setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1)
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1),
     );
   };
 
@@ -89,7 +220,7 @@ export default function CalendarScreen() {
       <ScrollView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}> {/* <-- updated */}
+          <TouchableOpacity onPress={() => router.back()}>
             <ArrowLeft size={24} />
           </TouchableOpacity>
           <Text style={styles.title}>Dashboard</Text>
@@ -118,8 +249,9 @@ export default function CalendarScreen() {
         {/* Calendar Days */}
         <View style={styles.calendarGrid}>
           {calendarDays.map((day, index) => {
-            const hasEvents = day && events[day];
+            const hasEvents = day && eventsByDay[day];
             const isToday = day === 12; // mock today
+
             return (
               <TouchableOpacity
                 key={index}
@@ -138,9 +270,10 @@ export default function CalendarScreen() {
                     >
                       {day}
                     </Text>
+
                     {hasEvents && (
                       <View style={styles.eventDots}>
-                        {events[day].slice(0, 3).map((_, i) => (
+                        {eventsByDay[day].slice(0, 3).map((_, i) => (
                           <View
                             key={i}
                             style={[
@@ -162,7 +295,7 @@ export default function CalendarScreen() {
   }
 
   // ---------------- DAY VIEW ----------------
-  const dayEvents = events[selectedDay] || [];
+  const dayEvents = eventsByDay[selectedDay] || [];
 
   return (
     <ScrollView style={styles.container}>
@@ -177,7 +310,7 @@ export default function CalendarScreen() {
         {new Date(
           currentMonth.getFullYear(),
           currentMonth.getMonth(),
-          selectedDay
+          selectedDay,
         ).toLocaleDateString("en-US", {
           weekday: "long",
           month: "long",
@@ -185,19 +318,170 @@ export default function CalendarScreen() {
         })}
       </Text>
 
+      {/* Add event UI */}
+        <View
+          style={{
+            backgroundColor: "white",
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: "#E5E7EB",
+          }}
+        >
+          <Text style={{ fontWeight: "700", marginBottom: 8 }}>Add Event</Text>
+
+          {isCoach ? (
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+              <TouchableOpacity
+                onPress={() => setEventScope("personal")}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  backgroundColor:
+                    eventScope === "personal" ? "#111827" : "transparent",
+                }}
+              >
+                <Text
+                  style={{
+                    textAlign: "center",
+                    color: eventScope === "personal" ? "white" : "black",
+                  }}
+                >
+                  Personal
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setEventScope("team")}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  backgroundColor:
+                    eventScope === "team" ? "#111827" : "transparent",
+                }}
+              >
+                <Text
+                  style={{
+                    textAlign: "center",
+                    color: eventScope === "team" ? "white" : "black",
+                  }}
+                >
+                  Team
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={{ color: "#6B7280", marginBottom: 10 }}>
+              You can add personal events only.
+            </Text>
+          )}
+
+          <TextInput
+            placeholder="Title (e.g., Team Lift)"
+            value={newTitle}
+            onChangeText={setNewTitle}
+            style={{
+              borderWidth: 1,
+              borderColor: "#D1D5DB",
+              borderRadius: 10,
+              padding: 10,
+              marginBottom: 10,
+            }}
+          />
+
+          <TextInput
+            placeholder="Time label (e.g., 3:00 PM)"
+            value={newTime}
+            onChangeText={setNewTime}
+            style={{
+              borderWidth: 1,
+              borderColor: "#D1D5DB",
+              borderRadius: 10,
+              padding: 10,
+              marginBottom: 10,
+            }}
+          />
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TextInput
+              placeholder="Hour (0-23)"
+              value={newHour}
+              onChangeText={setNewHour}
+              keyboardType="numeric"
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: "#D1D5DB",
+                borderRadius: 10,
+                padding: 10,
+              }}
+            />
+            <TextInput
+              placeholder="Duration (hrs)"
+              value={newDuration}
+              onChangeText={setNewDuration}
+              keyboardType="numeric"
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: "#D1D5DB",
+                borderRadius: 10,
+                padding: 10,
+              }}
+            />
+          </View>
+
+          <TouchableOpacity
+            onPress={() => addEventToDay(selectedDay)}
+            style={{
+              backgroundColor: "#22C55E",
+              padding: 12,
+              borderRadius: 12,
+              marginTop: 10,
+            }}
+          >
+            <Text
+              style={{ color: "white", fontWeight: "700", textAlign: "center" }}
+            >
+              Add
+            </Text>
+          </TouchableOpacity>
+        </View>
+      
+
       {hours.map((hour) => {
         const hourEvents = dayEvents.filter((e) => e.hour === hour);
+
         return (
           <View key={hour} style={styles.hourRow}>
             <Text style={styles.hourLabel}>{formatHour(hour)}</Text>
+
             <View style={styles.timeline}>
-              {hourEvents.map((event, idx) => (
+              {hourEvents.map((event) => (
                 <View
-                  key={idx}
+                  key={event.id}
                   style={[styles.eventBlock, { height: event.duration * 50 }]}
                 >
                   <Text style={styles.eventTitle}>{event.title}</Text>
-                  <Text style={styles.eventTime}>{event.time}</Text>
+                  <Text style={styles.eventTime}>
+                    {event.time_label} • {event.scope}
+                  </Text>
+
+                  {(isCoach || event.scope === "personal") && (
+                    <TouchableOpacity
+                      onPress={() => removeEvent(event.id)}
+                      style={{ marginTop: 6 }}
+                    >
+                      <Text style={{ color: "crimson", fontSize: 11 }}>
+                        Remove
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
             </View>
@@ -255,13 +539,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
   },
   dayInfo: { fontSize: 16, marginBottom: 16, color: "#6B7280" },
-  hourRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
+  hourRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
   hourLabel: { width: 50, fontSize: 12, color: "#6B7280" },
   timeline: {
     flex: 1,
     borderTopWidth: 1,
     borderColor: "#E5E7EB",
     position: "relative",
+    minHeight: 50,
   },
   eventBlock: {
     position: "absolute",
@@ -271,7 +560,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderColor: "#3B82F6",
     borderRadius: 4,
-    padding: 4,
+    padding: 6,
   },
   eventTitle: { fontSize: 12, fontWeight: "600" },
   eventTime: { fontSize: 10, color: "#374151" },
