@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
+import { useTeam } from "../../lib/utils/useTeam";
 
 export default function CheckInScreen() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function CheckInScreen() {
   const [comments, setComments] = useState("");
 
   const { role, loadingRole } = useRole();
+  const { teamId, loadingTeam } = useTeam();
   const isCoach = role === "coach";
 
   const [coachLoading, setCoachLoading] = useState(false);
@@ -32,16 +34,17 @@ export default function CheckInScreen() {
   const [todayCheckins, setTodayCheckins] = useState([]); // [{ user_id, created_at }]
 
   useEffect(() => {
-    if (loadingRole) return;
-    if (!isCoach) return;
+    if (loadingRole || loadingTeam) return;
+    if (!isCoach || !teamId) return;
 
     async function loadCoachView() {
       setCoachLoading(true);
 
       // 1) athletes list (from profiles)
       const { data: athletes, error: athletesErr } = await supabase
-        .from("profiles")
+        .from("team_memberships")
         .select("user_id, role")
+        .eq("team_id", teamId)
         .eq("role", "athlete");
 
       if (athletesErr) {
@@ -50,17 +53,13 @@ export default function CheckInScreen() {
         return;
       }
 
-      // 2) checkins submitted "today"
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setHours(23, 59, 59, 999);
+      const todayString = new Date().toISOString().slice(0, 10);
 
       const { data: checkins, error: checkinsErr } = await supabase
         .from("checkins")
-        .select("user_id, created_at")
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString());
+        .select("user_id, created_at, team_id, date")
+        .eq("team_id", teamId)
+        .eq("date", todayString);
 
       if (checkinsErr) {
         console.log("Load checkins error:", checkinsErr);
@@ -74,7 +73,7 @@ export default function CheckInScreen() {
     }
 
     loadCoachView();
-  }, [loadingRole, isCoach]);
+  }, [loadingRole, loadingTeam, isCoach, teamId]);
 
   const today = new Date();
   const dateString = today.toLocaleDateString("en-US", {
@@ -85,7 +84,12 @@ export default function CheckInScreen() {
 
   // ------------------ Submit ------------------
   const handleSubmit = async () => {
-    alert("Submit pressed!");
+    if (isCoach) return;
+    if (!teamId) {
+      alert("No team found for this athlete.");
+      return;
+    }
+
     console.log("HANDLE SUBMIT FIRED");
 
     try {
@@ -111,6 +115,7 @@ export default function CheckInScreen() {
       }
 
       const { error } = await supabase.from("checkins").insert({
+        date: new Date().toISOString().slice(0, 10),
         hours_of_sleep: parseInt(hoursOfSleep) || 0,
         sleep_quality: parseInt(sleepQuality) || 0,
         tiredness: parseInt(tirednessLevel) || 0,
@@ -118,6 +123,7 @@ export default function CheckInScreen() {
         mood: parseInt(mood) || 50,
         comments: comments || "",
         user_id: user.id,
+        team_id: teamId,
       });
 
       if (error) {
@@ -127,7 +133,7 @@ export default function CheckInScreen() {
       }
 
       console.log("Check-in submitted!");
-      router.push("/"); // Navigate to Home after submit
+      router.replace("/"); // Navigate to Home after submit
     } catch (err) {
       console.log("Unexpected error:", err);
     }
@@ -159,10 +165,17 @@ export default function CheckInScreen() {
     </View>
   );
 
-  if (loadingRole) return null;
+  if (loadingRole || loadingTeam) return null;
 
   if (isCoach) {
-    const submittedSet = new Set((todayCheckins || []).map((c) => c.user_id));
+    const submittedSet = new Set(
+      (todayCheckins || []).map((c) => String(c.user_id)),
+    );
+
+    console.log("teamId:", teamId);
+    console.log("athleteRows:", JSON.stringify(athleteRows, null, 2));
+    console.log("todayCheckins:", JSON.stringify(todayCheckins, null, 2));
+    console.log("submittedSet:", Array.from(submittedSet));
 
     return (
       <View style={styles.container}>
@@ -188,7 +201,8 @@ export default function CheckInScreen() {
               <Text>Loading...</Text>
             ) : (
               athleteRows.map((a) => {
-                const ok = submittedSet.has(a.user_id);
+                const ok = submittedSet.has(String(a.user_id));
+                console.log("checking athlete:", String(a.user_id), ok);
                 return (
                   <View
                     key={a.user_id}

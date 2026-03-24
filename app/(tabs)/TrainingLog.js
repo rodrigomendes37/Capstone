@@ -1,8 +1,9 @@
 // @ts-nocheck
-import { useRouter } from "expo-router"; // <-- corrected
+import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,104 +11,423 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
+import { useTeam } from "../../lib/utils/useTeam";
 
-// Mock exercises for today
-const todaysWorkout = [
-  { id: "1", name: "Barbell Back Squat", sets: 4, reps: 8 },
-  { id: "2", name: "Romanian Deadlift", sets: 3, reps: 10 },
-  { id: "3", name: "Leg Press", sets: 3, reps: 12 },
-  { id: "4", name: "Walking Lunges", sets: 3, reps: 20 },
-  { id: "5", name: "Leg Curl", sets: 3, reps: 12 },
-  { id: "6", name: "Calf Raises", sets: 4, reps: 15 },
-];
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function TrainingLog() {
-  const router = useRouter(); // <-- initialize router here
+  const router = useRouter();
 
   const { role, loadingRole } = useRole();
-  if (loadingRole) return null;
+  const { teamId, loadingTeam } = useTeam();
+  const isCoach = role === "coach";
 
   const today = new Date();
+  const todayString = getLocalDateString(today);
   const dateString = today.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
 
-  const [weights, setWeights] = useState(() => {
-    const saved = null; // Replace with AsyncStorage or local persistence if needed
-    if (saved) return saved;
-    return todaysWorkout.reduce((acc, ex) => {
-      acc[ex.id] = Array(ex.sets).fill("");
-      return acc;
-    }, {});
-  });
+  const [assignment, setAssignment] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const [nextAssignment, setNextAssignment] = useState(null);
 
-  if (role === "coach") {
+  // coach form state
+  const [title, setTitle] = useState("Team Lift");
+  const [notes, setNotes] = useState("");
+  const [assignedDate, setAssignedDate] = useState(todayString);
+  const [exercises, setExercises] = useState([
+    { name: "Back Squat", sets: "4", reps: "6" },
+    { name: "RDL", sets: "3", reps: "8" },
+  ]);
+
+  // athlete submission state
+  const [submission, setSubmission] = useState({});
+  const [expandedAthlete, setExpandedAthlete] = useState(null);
+
+  async function loadTrainingData() {
+    if (!teamId) return;
+
+    setLoadingData(true);
+
+    const { data: assignmentData, error: assignmentErr } = await supabase
+      .from("workout_assignments")
+      .select("*")
+      .eq("team_id", teamId)
+      .eq("assigned_date", todayString)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (assignmentErr) {
+      console.log("Load assignment error:", assignmentErr);
+      setAssignment(null);
+      setLogs([]);
+      setLoadingData(false);
+      return;
+    }
+
+    setAssignment(assignmentData || null);
+
+    if (assignmentData) {
+      const { data: logsData, error: logsErr } = await supabase
+        .from("workout_logs")
+        .select("*")
+        .eq("assignment_id", assignmentData.id);
+
+      if (logsErr) {
+        console.log("Load workout logs error:", logsErr);
+        setLogs([]);
+      } else {
+        setLogs(logsData || []);
+      }
+    } else {
+      setLogs([]);
+    }
+
+    const { data: nextData, error: nextErr } = await supabase
+      .from("workout_assignments")
+      .select("*")
+      .eq("team_id", teamId)
+      .gt("assigned_date", todayString)
+      .order("assigned_date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (nextErr) {
+      console.log("Load next assignment error:", nextErr);
+      setNextAssignment(null);
+    } else {
+      setNextAssignment(nextData || null);
+    }
+
+    setLoadingData(false);
+  }
+
+  useEffect(() => {
+    if (loadingRole || loadingTeam) return;
+    if (!teamId) return;
+    loadTrainingData();
+  }, [loadingRole, loadingTeam, teamId, role]);
+
+  function updateExercise(i, patch) {
+    setExercises((prev) =>
+      prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)),
+    );
+  }
+
+  function addExercise() {
+    setExercises((prev) => [...prev, { name: "", sets: "3", reps: "10" }]);
+  }
+
+  function removeExercise(i) {
+    setExercises((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function updateSubmission(exerciseIndex, setIndex, value) {
+    setSubmission((prev) => ({
+      ...prev,
+      [exerciseIndex]: {
+        ...(prev[exerciseIndex] || {}),
+        [setIndex]: value,
+      },
+    }));
+  }
+
+  async function saveAssignment() {
+    if (!teamId) return;
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) return;
+
+    // 1) Save workout assignment
+    const { error: assignmentError } = await supabase
+      .from("workout_assignments")
+      .insert({
+        team_id: teamId,
+        created_by: user.id,
+        title: title.trim() || "Team Lift",
+        assigned_date: assignedDate,
+        notes,
+        exercises,
+      });
+
+    if (assignmentError) {
+      console.log("Save assignment error:", assignmentError);
+      return;
+    }
+
+    // 2) Create matching calendar event for the team
+    const { error: calendarError } = await supabase
+      .from("calendar_events")
+      .insert({
+        team_id: teamId,
+        created_by: user.id,
+        scope: "team",
+        title: title.trim() || "Team Lift",
+        event_date: assignedDate,
+        time_label: "Workout",
+        hour: 8,
+        duration: 1,
+      });
+
+    if (calendarError) {
+      console.log("Save calendar event error:", calendarError);
+      return;
+    }
+
+    Alert.alert("Success", "Workout assigned successfully.");
+    await loadTrainingData();
+    router.replace("/");
+  }
+
+  async function submitWorkoutLog() {
+    if (!assignment) return;
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) return;
+
+    const { error } = await supabase.from("workout_logs").upsert(
+      {
+        assignment_id: assignment.id,
+        athlete_user_id: user.id,
+        submission,
+      },
+      { onConflict: "assignment_id,athlete_user_id" },
+    );
+
+    if (error) {
+      console.log("Submit workout log error:", error);
+      return;
+    }
+
+    await loadTrainingData();
+    router.replace("/");
+  }
+
+  if (loadingRole || loadingTeam || loadingData) return null;
+
+  if (isCoach) {
     return (
-      <View style={styles.container}>
-        {/* Header */}
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <ArrowLeft size={24} />
           </TouchableOpacity>
-          <Text style={styles.title}>Training Log (Coach)</Text>
+          <Text style={styles.title}>Training Log</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <Text style={styles.dateText}>{dateString}</Text>
 
-        <View style={{ paddingHorizontal: 16, gap: 12 }}>
-          <View style={styles.exerciseCard}>
-            <Text style={{ fontSize: 18, fontWeight: "700" }}>Coach View</Text>
-            <Text style={{ color: "#6B7280", marginTop: 6 }}>
-              Coaches create workout templates (exercises + sets + reps).
-              Athletes will only input weight/time for each set.
-            </Text>
-          </View>
+        <View style={styles.exerciseCard}>
+          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+            Coach View
+          </Text>
 
-          <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: "#6b46c1" }]}
-            onPress={() => router.push("/(tabs)/CoachWorkoutBuilder")}
-          >
-            <Text style={styles.submitText}>
-              Create / Edit Workout Template
-            </Text>
+          <TextInput
+            placeholder="Workout title"
+            value={title}
+            onChangeText={setTitle}
+            style={styles.input}
+          />
+
+          <TextInput
+            placeholder="Assigned date (YYYY-MM-DD)"
+            value={assignedDate}
+            onChangeText={setAssignedDate}
+            style={[styles.input, { marginTop: 10 }]}
+          />
+
+          <TextInput
+            placeholder="Notes"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            style={[styles.input, { marginTop: 10, height: 80 }]}
+          />
+        </View>
+
+        <View style={styles.exerciseCard}>
+          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+            Exercises
+          </Text>
+
+          {exercises.map((ex, i) => (
+            <View key={i} style={{ marginBottom: 12 }}>
+              <TextInput
+                placeholder="Exercise name"
+                value={ex.name}
+                onChangeText={(v) => updateExercise(i, { name: v })}
+                style={styles.input}
+              />
+
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+                <TextInput
+                  placeholder="Sets"
+                  value={ex.sets}
+                  onChangeText={(v) => updateExercise(i, { sets: v })}
+                  keyboardType="numeric"
+                  style={[styles.input, { flex: 1 }]}
+                />
+                <TextInput
+                  placeholder="Reps"
+                  value={ex.reps}
+                  onChangeText={(v) => updateExercise(i, { reps: v })}
+                  keyboardType="numeric"
+                  style={[styles.input, { flex: 1 }]}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={() => removeExercise(i)}
+                style={{ marginTop: 8 }}
+              >
+                <Text style={{ color: "crimson" }}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.submitButton} onPress={addExercise}>
+            <Text style={styles.submitText}>Add Exercise</Text>
           </TouchableOpacity>
 
-          <View style={styles.exerciseCard}>
-            <Text style={{ fontWeight: "600", marginBottom: 8 }}>
-              Demo Preview (Today)
+          <TouchableOpacity
+            style={[styles.submitButton, { marginTop: 10 }]}
+            onPress={saveAssignment}
+          >
+            <Text style={styles.submitText}>Save Workout Assignment</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.exerciseCard}>
+          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+            Athlete Submissions for Today
+          </Text>
+
+          {logs.length === 0 ? (
+            <Text style={{ color: "#6B7280" }}>
+              No athlete submissions yet.
             </Text>
-            {todaysWorkout.map((ex) => (
-              <Text key={ex.id} style={{ color: "#374151", marginBottom: 4 }}>
-                • {ex.name} — {ex.sets}×{ex.reps}
-              </Text>
-            ))}
-          </View>
+          ) : (
+            logs.map((log) => (
+              <View
+                key={log.id}
+                style={{
+                  marginBottom: 12,
+                  backgroundColor: "white",
+                  borderWidth: 1,
+                  borderColor: "#E5E7EB",
+                  borderRadius: 10,
+                  padding: 12,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() =>
+                    setExpandedAthlete((prev) =>
+                      prev === log.id ? null : log.id,
+                    )
+                  }
+                >
+                  <Text style={{ fontWeight: "600", fontSize: 16 }}>
+                    Athlete {String(log.athlete_user_id).slice(0, 8)}…
+                  </Text>
+                  <Text style={{ color: "#6B7280", marginTop: 4 }}>
+                    Tap to {expandedAthlete === log.id ? "hide" : "view"}{" "}
+                    submission
+                  </Text>
+                </TouchableOpacity>
+
+                {expandedAthlete === log.id && (
+                  <View style={{ marginTop: 10 }}>
+                    {(assignment?.exercises || []).map(
+                      (exercise, exerciseIndex) => (
+                        <View key={exerciseIndex} style={{ marginBottom: 10 }}>
+                          <Text style={{ fontWeight: "600" }}>
+                            {exercise.name}
+                          </Text>
+                          <Text style={{ color: "#6B7280", marginBottom: 4 }}>
+                            {exercise.sets} sets × {exercise.reps} reps
+                          </Text>
+
+                          {Array.from({
+                            length: Number(exercise.sets) || 0,
+                          }).map((_, setIndex) => (
+                            <Text key={setIndex} style={{ color: "#374151" }}>
+                              Set {setIndex + 1}:{" "}
+                              {log.submission?.[exerciseIndex]?.[setIndex] ||
+                                "-"}
+                            </Text>
+                          ))}
+                        </View>
+                      ),
+                    )}
+                  </View>
+                )}
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    );
+  }
+
+  if (!assignment) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <ArrowLeft size={24} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Training Log</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <Text style={styles.dateText}>{dateString}</Text>
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: "#6B7280", marginBottom: 8 }}>
+            No workout assigned for today.
+          </Text>
+
+          {nextAssignment && (
+            <Text style={{ color: "#374151" }}>
+              Next workout: {nextAssignment.title} on{" "}
+              {new Date(
+                nextAssignment.assigned_date + "T00:00:00",
+              ).toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </Text>
+          )}
         </View>
       </View>
     );
   }
 
-  const handleWeightChange = (exerciseId, setIndex, value) => {
-    setWeights((prev) => ({
-      ...prev,
-      [exerciseId]: prev[exerciseId].map((w, i) =>
-        i === setIndex ? value : w,
-      ),
-    }));
-  };
-
-  const handleSubmit = () => {
-    console.log("Submitted weights:", weights);
-    router.back(); // <-- navigate back
-  };
+  const todaysWorkout = assignment.exercises || [];
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeft size={24} />
@@ -119,23 +439,23 @@ export default function TrainingLog() {
       <Text style={styles.dateText}>{dateString}</Text>
 
       <ScrollView style={styles.scrollContent}>
-        {todaysWorkout.map((exercise) => (
-          <View key={exercise.id} style={styles.exerciseCard}>
+        {todaysWorkout.map((exercise, exerciseIndex) => (
+          <View key={exerciseIndex} style={styles.exerciseCard}>
             <Text style={styles.exerciseName}>{exercise.name}</Text>
             <Text style={styles.exerciseSets}>
               {exercise.sets} sets × {exercise.reps} reps
             </Text>
 
-            {Array.from({ length: exercise.sets }).map((_, i) => (
+            {Array.from({ length: Number(exercise.sets) || 0 }).map((_, i) => (
               <View key={i} style={styles.setRow}>
                 <Text style={styles.setLabel}>Set {i + 1}</Text>
                 <TextInput
                   style={styles.input}
-                  value={weights[exercise.id][i]}
+                  value={submission?.[exerciseIndex]?.[i] || ""}
                   onChangeText={(text) =>
-                    handleWeightChange(exercise.id, i, text)
+                    updateSubmission(exerciseIndex, i, text)
                   }
-                  placeholder="Weight"
+                  placeholder="Weight / Time"
                   keyboardType="numeric"
                 />
                 <Text style={styles.lbs}>lbs</Text>
@@ -144,8 +464,10 @@ export default function TrainingLog() {
           </View>
         ))}
 
-        {/* Submit Button */}
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={submitWorkoutLog}
+        >
           <Text style={styles.submitText}>Submit</Text>
         </TouchableOpacity>
       </ScrollView>
