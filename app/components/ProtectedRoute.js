@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { supabase } from "../../lib/services/supabase"; // path relative to app/components
+import { supabase } from "../../lib/services/supabase";
 
 export default function ProtectedRoute({ children }) {
   const router = useRouter();
@@ -11,29 +11,38 @@ export default function ProtectedRoute({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    async function loadSession() {
+      const { data, error } = await supabase.auth.getSession();
+
       if (!mounted) return;
-      setSession(data.session);
+
+      if (error) {
+        console.log("ProtectedRoute getSession error:", error);
+      }
+
+      setSession(data?.session ?? null);
+      setIsLoading(false);
+    }
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) return;
+      setSession(nextSession ?? null);
       setIsLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setIsLoading(false);
-        if (!session) router.replace("/login");
-      },
-    );
-
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (!isLoading && !session) {
-      router.replace("/login"); // lowercase!
+      router.replace("/login");
     }
   }, [isLoading, session, router]);
 

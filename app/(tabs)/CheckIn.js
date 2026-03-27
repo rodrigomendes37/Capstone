@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,9 +13,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
+
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function CheckInScreen() {
   const router = useRouter();
@@ -30,8 +39,9 @@ export default function CheckInScreen() {
   const isCoach = role === "coach";
 
   const [coachLoading, setCoachLoading] = useState(false);
-  const [athleteRows, setAthleteRows] = useState([]); // [{ user_id }]
-  const [todayCheckins, setTodayCheckins] = useState([]); // [{ user_id, created_at }]
+  const [athleteRows, setAthleteRows] = useState([]);
+  const [todayCheckins, setTodayCheckins] = useState([]);
+  const [expandedAthlete, setExpandedAthlete] = useState(null);
 
   useEffect(() => {
     if (loadingRole || loadingTeam) return;
@@ -40,7 +50,9 @@ export default function CheckInScreen() {
     async function loadCoachView() {
       setCoachLoading(true);
 
-      // 1) athletes list (from profiles)
+      const todayString = getLocalDateString(new Date());
+
+      // 1) athlete membership rows for this coach's team
       const { data: athletes, error: athletesErr } = await supabase
         .from("team_memberships")
         .select("user_id, role")
@@ -53,11 +65,12 @@ export default function CheckInScreen() {
         return;
       }
 
-      const todayString = new Date().toISOString().slice(0, 10);
-
+      // 2) today's submitted check-ins for this team
       const { data: checkins, error: checkinsErr } = await supabase
         .from("checkins")
-        .select("user_id, created_at, team_id, date")
+        .select(
+          "id, user_id, created_at, team_id, date, hours_of_sleep, sleep_quality, tiredness, soreness, mood, comments"
+        )
         .eq("team_id", teamId)
         .eq("date", todayString);
 
@@ -86,7 +99,7 @@ export default function CheckInScreen() {
   const handleSubmit = async () => {
     if (isCoach) return;
     if (!teamId) {
-      alert("No team found for this athlete.");
+      Alert.alert("Missing team", "No team found for this athlete.");
       return;
     }
 
@@ -110,12 +123,12 @@ export default function CheckInScreen() {
 
       if (!user || !user.id) {
         console.log("No valid user for check-in!");
-        alert("Please log in first.");
+        Alert.alert("Login required", "Please log in first.");
         return;
       }
 
       const { error } = await supabase.from("checkins").insert({
-        date: new Date().toISOString().slice(0, 10),
+        date: getLocalDateString(new Date()),
         hours_of_sleep: parseInt(hoursOfSleep) || 0,
         sleep_quality: parseInt(sleepQuality) || 0,
         tiredness: parseInt(tirednessLevel) || 0,
@@ -128,7 +141,7 @@ export default function CheckInScreen() {
 
       if (error) {
         console.log("Error inserting check-in:", error);
-        alert("Check-in failed: " + JSON.stringify(error));
+        Alert.alert("Check-in failed", JSON.stringify(error));
         return;
       }
 
@@ -178,7 +191,7 @@ export default function CheckInScreen() {
     console.log("submittedSet:", Array.from(submittedSet));
 
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={() => router.back()}>
@@ -201,8 +214,11 @@ export default function CheckInScreen() {
               <Text>Loading...</Text>
             ) : (
               athleteRows.map((a) => {
-                const ok = submittedSet.has(String(a.user_id));
-                console.log("checking athlete:", String(a.user_id), ok);
+                const checkin = todayCheckins.find(
+                  (c) => String(c.user_id) === String(a.user_id),
+                );
+                const ok = !!checkin;
+
                 return (
                   <View
                     key={a.user_id}
@@ -213,23 +229,56 @@ export default function CheckInScreen() {
                       borderRadius: 10,
                       padding: 12,
                       marginBottom: 10,
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
                     }}
                   >
-                    <Text style={{ fontWeight: "600" }}>
-                      Athlete {String(a.user_id).slice(0, 8)}…
-                    </Text>
-
-                    <Text
+                    <TouchableOpacity
+                      onPress={() =>
+                        setExpandedAthlete((prev) =>
+                          prev === a.user_id ? null : a.user_id,
+                        )
+                      }
                       style={{
-                        fontWeight: "700",
-                        color: ok ? "#22C55E" : "crimson",
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
                       }}
                     >
-                      {ok ? "✅ Submitted" : "❌ Missing"}
-                    </Text>
+                      <Text style={{ fontWeight: "600" }}>
+                        Athlete {String(a.user_id).slice(0, 8)}…
+                      </Text>
+
+                      <Text
+                        style={{
+                          fontWeight: "700",
+                          color: ok ? "#22C55E" : "crimson",
+                        }}
+                      >
+                        {ok ? "✅ Submitted" : "❌ Missing"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {expandedAthlete === a.user_id && checkin && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ color: "#374151", marginBottom: 4 }}>
+                          Sleep: {checkin.hours_of_sleep} hrs
+                        </Text>
+                        <Text style={{ color: "#374151", marginBottom: 4 }}>
+                          Sleep Quality: {checkin.sleep_quality}
+                        </Text>
+                        <Text style={{ color: "#374151", marginBottom: 4 }}>
+                          Tiredness: {checkin.tiredness}
+                        </Text>
+                        <Text style={{ color: "#374151", marginBottom: 4 }}>
+                          Soreness: {checkin.soreness}
+                        </Text>
+                        <Text style={{ color: "#374151", marginBottom: 4 }}>
+                          Mood: {checkin.mood}
+                        </Text>
+                        <Text style={{ color: "#374151" }}>
+                          Comments: {checkin.comments || "None"}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 );
               })
@@ -237,17 +286,17 @@ export default function CheckInScreen() {
 
             {!coachLoading && athleteRows.length === 0 && (
               <Text style={{ color: "#6B7280" }}>
-                No athletes found in profiles yet.
+                No athletes found on this team yet.
               </Text>
             )}
           </View>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
@@ -324,7 +373,7 @@ export default function CheckInScreen() {
           </Pressable>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -335,13 +384,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderBottomWidth: 1,
     borderColor: "#E5E7EB",
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
   },
   title: { fontSize: 24, fontWeight: "bold", textAlign: "center" },
   dateText: { textAlign: "center", color: "#6B7280", marginTop: 8 },

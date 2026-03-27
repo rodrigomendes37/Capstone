@@ -14,6 +14,7 @@ import {
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -43,12 +44,13 @@ export default function TrainingLog() {
   const [nextAssignment, setNextAssignment] = useState(null);
 
   // coach form state
-  const [title, setTitle] = useState("Team Lift");
+  const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [assignedDate, setAssignedDate] = useState(todayString);
+  const [startTime, setStartTime] = useState("08:00");
+  const [endTime, setEndTime] = useState("09:00");
   const [exercises, setExercises] = useState([
-    { name: "Back Squat", sets: "4", reps: "6" },
-    { name: "RDL", sets: "3", reps: "8" },
+    { name: "", sets: "", reps: "" },
   ]);
 
   // athlete submission state
@@ -59,6 +61,10 @@ export default function TrainingLog() {
     if (!teamId) return;
 
     setLoadingData(true);
+    setAssignment(null);
+    setLogs([]);
+    setNextAssignment(null);
+    setSubmission({});
 
     const { data: assignmentData, error: assignmentErr } = await supabase
       .from("workout_assignments")
@@ -68,6 +74,9 @@ export default function TrainingLog() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    console.log("todayString:", todayString);
+    console.log("assignmentData:", assignmentData);
 
     if (assignmentErr) {
       console.log("Load assignment error:", assignmentErr);
@@ -127,7 +136,7 @@ export default function TrainingLog() {
   }
 
   function addExercise() {
-    setExercises((prev) => [...prev, { name: "", sets: "3", reps: "10" }]);
+    setExercises((prev) => [...prev, { name: "", sets: "", reps: "" }]);
   }
 
   function removeExercise(i) {
@@ -147,6 +156,14 @@ export default function TrainingLog() {
   async function saveAssignment() {
     if (!teamId) return;
 
+    const startHour = Number(startTime.split(":")[0]);
+    const startMinute = Number(startTime.split(":")[1] || 0);
+
+    const endHour = Number(endTime.split(":")[0]);
+    const endMinute = Number(endTime.split(":")[1] || 0);
+
+    const duration = endHour + endMinute / 60 - (startHour + startMinute / 60);
+
     const {
       data: { user },
       error: userErr,
@@ -155,19 +172,22 @@ export default function TrainingLog() {
     if (userErr || !user) return;
 
     // 1) Save workout assignment
-    const { error: assignmentError } = await supabase
+    const { data: assignmentInsert, error: assignmentError } = await supabase
       .from("workout_assignments")
       .insert({
         team_id: teamId,
         created_by: user.id,
-        title: title.trim() || "Team Lift",
+        title: title.trim() || "Workout",
         assigned_date: assignedDate,
         notes,
         exercises,
-      });
+      })
+      .select()
+      .single();
 
     if (assignmentError) {
       console.log("Save assignment error:", assignmentError);
+      Alert.alert("Save failed", "Could not save the workout assignment.");
       return;
     }
 
@@ -175,22 +195,44 @@ export default function TrainingLog() {
     const { error: calendarError } = await supabase
       .from("calendar_events")
       .insert({
+        assignment_id: assignmentInsert.id,
         team_id: teamId,
         created_by: user.id,
         scope: "team",
-        title: title.trim() || "Team Lift",
+        title: title.trim() || "Workout",
         event_date: assignedDate,
-        time_label: "Workout",
-        hour: 8,
-        duration: 1,
+        time_label: `${startTime} - ${endTime}`,
+        hour: startHour,
+        duration: duration,
       });
 
     if (calendarError) {
       console.log("Save calendar event error:", calendarError);
+      Alert.alert("Save failed", "Could not add the workout to the calendar.");
       return;
     }
 
     Alert.alert("Success", "Workout assigned successfully.");
+    await loadTrainingData();
+    router.replace("/");
+  }
+
+  async function deleteAssignment() {
+    if (!assignment?.id) return;
+
+    const { error } = await supabase
+      .from("workout_assignments")
+      .delete()
+      .eq("id", assignment.id);
+
+    if (error) {
+      console.log("Delete assignment error:", error);
+      return;
+    }
+
+    Alert.alert("Deleted", "Workout assignment deleted successfully.");
+    setAssignment(null);
+    setLogs([]);
     await loadTrainingData();
     router.replace("/");
   }
@@ -227,172 +269,202 @@ export default function TrainingLog() {
 
   if (isCoach) {
     return (
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <ArrowLeft size={24} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Training Log</Text>
-          <View style={{ width: 24 }} />
-        </View>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <ArrowLeft size={24} />
+            </TouchableOpacity>
+            <Text style={styles.title}>Training Log</Text>
+            <View style={{ width: 24 }} />
+          </View>
 
-        <Text style={styles.dateText}>{dateString}</Text>
+          <Text style={styles.dateText}>{dateString}</Text>
 
-        <View style={styles.exerciseCard}>
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
-            Coach View
-          </Text>
-
-          <TextInput
-            placeholder="Workout title"
-            value={title}
-            onChangeText={setTitle}
-            style={styles.input}
-          />
-
-          <TextInput
-            placeholder="Assigned date (YYYY-MM-DD)"
-            value={assignedDate}
-            onChangeText={setAssignedDate}
-            style={[styles.input, { marginTop: 10 }]}
-          />
-
-          <TextInput
-            placeholder="Notes"
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            style={[styles.input, { marginTop: 10, height: 80 }]}
-          />
-        </View>
-
-        <View style={styles.exerciseCard}>
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
-            Exercises
-          </Text>
-
-          {exercises.map((ex, i) => (
-            <View key={i} style={{ marginBottom: 12 }}>
-              <TextInput
-                placeholder="Exercise name"
-                value={ex.name}
-                onChangeText={(v) => updateExercise(i, { name: v })}
-                style={styles.input}
-              />
-
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-                <TextInput
-                  placeholder="Sets"
-                  value={ex.sets}
-                  onChangeText={(v) => updateExercise(i, { sets: v })}
-                  keyboardType="numeric"
-                  style={[styles.input, { flex: 1 }]}
-                />
-                <TextInput
-                  placeholder="Reps"
-                  value={ex.reps}
-                  onChangeText={(v) => updateExercise(i, { reps: v })}
-                  keyboardType="numeric"
-                  style={[styles.input, { flex: 1 }]}
-                />
-              </View>
-
-              <TouchableOpacity
-                onPress={() => removeExercise(i)}
-                style={{ marginTop: 8 }}
-              >
-                <Text style={{ color: "crimson" }}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          <TouchableOpacity style={styles.submitButton} onPress={addExercise}>
-            <Text style={styles.submitText}>Add Exercise</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.submitButton, { marginTop: 10 }]}
-            onPress={saveAssignment}
-          >
-            <Text style={styles.submitText}>Save Workout Assignment</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.exerciseCard}>
-          <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
-            Athlete Submissions for Today
-          </Text>
-
-          {logs.length === 0 ? (
-            <Text style={{ color: "#6B7280" }}>
-              No athlete submissions yet.
+          <View style={styles.exerciseCard}>
+            <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+              Coach View
             </Text>
-          ) : (
-            logs.map((log) => (
-              <View
-                key={log.id}
-                style={{
-                  marginBottom: 12,
-                  backgroundColor: "white",
-                  borderWidth: 1,
-                  borderColor: "#E5E7EB",
-                  borderRadius: 10,
-                  padding: 12,
-                }}
-              >
+
+            <TextInput
+              placeholder="Workout title"
+              value={title}
+              onChangeText={setTitle}
+              style={styles.input}
+            />
+
+            <TextInput
+              placeholder="Assigned date (YYYY-MM-DD)"
+              value={assignedDate}
+              onChangeText={setAssignedDate}
+              style={[styles.input, { marginTop: 10 }]}
+            />
+
+            <TextInput
+              placeholder="Start Time (08:00)"
+              value={startTime}
+              onChangeText={setStartTime}
+              style={[styles.input, { marginTop: 10 }]}
+            />
+
+            <TextInput
+              placeholder="End Time (09:00)"
+              value={endTime}
+              onChangeText={setEndTime}
+              style={[styles.input, { marginTop: 10 }]}
+            />
+
+            <TextInput
+              placeholder="Notes"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              style={[styles.input, { marginTop: 10, height: 80 }]}
+            />
+          </View>
+
+          <View style={styles.exerciseCard}>
+            <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+              Exercises
+            </Text>
+
+            {exercises.map((ex, i) => (
+              <View key={i} style={{ marginBottom: 12 }}>
+                <TextInput
+                  placeholder="Exercise name"
+                  value={ex.name}
+                  onChangeText={(v) => updateExercise(i, { name: v })}
+                  style={styles.input}
+                />
+
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+                  <TextInput
+                    placeholder="Sets"
+                    value={ex.sets}
+                    onChangeText={(v) => updateExercise(i, { sets: v })}
+                    keyboardType="numeric"
+                    style={[styles.input, { flex: 1 }]}
+                  />
+                  <TextInput
+                    placeholder="Reps"
+                    value={ex.reps}
+                    onChangeText={(v) => updateExercise(i, { reps: v })}
+                    keyboardType="numeric"
+                    style={[styles.input, { flex: 1 }]}
+                  />
+                </View>
+
                 <TouchableOpacity
-                  onPress={() =>
-                    setExpandedAthlete((prev) =>
-                      prev === log.id ? null : log.id,
-                    )
-                  }
+                  onPress={() => removeExercise(i)}
+                  style={{ marginTop: 8 }}
                 >
-                  <Text style={{ fontWeight: "600", fontSize: 16 }}>
-                    Athlete {String(log.athlete_user_id).slice(0, 8)}…
-                  </Text>
-                  <Text style={{ color: "#6B7280", marginTop: 4 }}>
-                    Tap to {expandedAthlete === log.id ? "hide" : "view"}{" "}
-                    submission
-                  </Text>
+                  <Text style={{ color: "crimson" }}>Remove</Text>
                 </TouchableOpacity>
-
-                {expandedAthlete === log.id && (
-                  <View style={{ marginTop: 10 }}>
-                    {(assignment?.exercises || []).map(
-                      (exercise, exerciseIndex) => (
-                        <View key={exerciseIndex} style={{ marginBottom: 10 }}>
-                          <Text style={{ fontWeight: "600" }}>
-                            {exercise.name}
-                          </Text>
-                          <Text style={{ color: "#6B7280", marginBottom: 4 }}>
-                            {exercise.sets} sets × {exercise.reps} reps
-                          </Text>
-
-                          {Array.from({
-                            length: Number(exercise.sets) || 0,
-                          }).map((_, setIndex) => (
-                            <Text key={setIndex} style={{ color: "#374151" }}>
-                              Set {setIndex + 1}:{" "}
-                              {log.submission?.[exerciseIndex]?.[setIndex] ||
-                                "-"}
-                            </Text>
-                          ))}
-                        </View>
-                      ),
-                    )}
-                  </View>
-                )}
               </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+            ))}
+
+            <TouchableOpacity style={styles.submitButton} onPress={addExercise}>
+              <Text style={styles.submitText}>Add Exercise</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.submitButton, { marginTop: 10 }]}
+              onPress={saveAssignment}
+            >
+              <Text style={styles.submitText}>Save Workout Assignment</Text>
+            </TouchableOpacity>
+
+            {assignment && (
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  { marginTop: 10, backgroundColor: "#DC2626" },
+                ]}
+                onPress={deleteAssignment}
+              >
+                <Text style={styles.submitText}>
+                  Delete Today&apos;s Assignment
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.exerciseCard}>
+            <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 10 }}>
+              Athlete Submissions for Today
+            </Text>
+
+            {logs.length === 0 ? (
+              <Text style={{ color: "#6B7280" }}>
+                No athlete submissions yet.
+              </Text>
+            ) : (
+              logs.map((log) => (
+                <View
+                  key={log.id}
+                  style={{
+                    marginBottom: 12,
+                    backgroundColor: "white",
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                    borderRadius: 10,
+                    padding: 12,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() =>
+                      setExpandedAthlete((prev) =>
+                        prev === log.id ? null : log.id,
+                      )
+                    }
+                  >
+                    <Text style={{ fontWeight: "600", fontSize: 16 }}>
+                      Athlete {String(log.athlete_user_id).slice(0, 8)}…
+                    </Text>
+                    <Text style={{ color: "#6B7280", marginTop: 4 }}>
+                      Tap to {expandedAthlete === log.id ? "hide" : "view"}{" "}
+                      submission
+                    </Text>
+                  </TouchableOpacity>
+
+                  {expandedAthlete === log.id && (
+                    <View style={{ marginTop: 10 }}>
+                      {(assignment?.exercises || []).map(
+                        (exercise, exerciseIndex) => (
+                          <View key={exerciseIndex} style={{ marginBottom: 10 }}>
+                            <Text style={{ fontWeight: "600" }}>
+                              {exercise.name}
+                            </Text>
+                            <Text style={{ color: "#6B7280", marginBottom: 4 }}>
+                              {exercise.sets} sets × {exercise.reps} reps
+                            </Text>
+
+                            {Array.from({
+                              length: Number(exercise.sets) || 0,
+                            }).map((_, setIndex) => (
+                              <Text key={setIndex} style={{ color: "#374151" }}>
+                                Set {setIndex + 1}:{" "}
+                                {log.submission?.[exerciseIndex]?.[setIndex] ||
+                                  "-"}
+                              </Text>
+                            ))}
+                          </View>
+                        ),
+                      )}
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   if (!assignment) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
             <ArrowLeft size={24} />
@@ -420,14 +492,14 @@ export default function TrainingLog() {
             </Text>
           )}
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   const todaysWorkout = assignment.exercises || [];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeft size={24} />
@@ -471,18 +543,20 @@ export default function TrainingLog() {
           <Text style={styles.submitText}>Submit</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB", paddingTop: 40 },
+  container: { flex: 1, backgroundColor: "#F9FAFB" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 16,
+    paddingTop: 8,
+    minHeight: 56,
   },
   title: { fontSize: 24, fontWeight: "bold" },
   dateText: {

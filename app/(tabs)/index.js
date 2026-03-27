@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardCheck,
 } from "lucide-react-native";
+import { useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -13,26 +14,102 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
+import { useTeam } from "../../lib/utils/useTeam";
 import ProtectedRoute from "../components/ProtectedRoute";
-
-// Temporary demo data
-const todaysEvents = [
-  { time: "8:00 AM", title: "Morning Run" },
-  { time: "3:00 PM", title: "Team Training" },
-];
-
-const todaysWorkout = { title: "Strength Training", time: "5:00 PM" };
 
 // Actual HomeScreen component
 function HomeScreen() {
   const router = useRouter();
   const dateString = new Date().toDateString();
   const { role, loadingRole } = useRole();
+  const { teamId, loadingTeam } = useTeam();
+
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [nextWorkout, setNextWorkout] = useState(null);
+  const [homeLoading, setHomeLoading] = useState(true);
+
+  function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  useEffect(() => {
+    async function loadHomeData() {
+      if (loadingRole || loadingTeam) return;
+
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (userErr || !user) {
+        setUpcomingEvents([]);
+        setNextWorkout(null);
+        setHomeLoading(false);
+        return;
+      }
+
+      const today = getLocalDateString(new Date());
+
+      // Calendar events: own personal + team events
+      let eventsQuery = supabase
+        .from("calendar_events")
+        .select("*")
+        .gte("event_date", today)
+        .order("event_date", { ascending: true })
+        .order("hour", { ascending: true });
+
+      if (teamId) {
+        eventsQuery = eventsQuery.or(
+          `created_by.eq.${user.id},and(scope.eq.team,team_id.eq.${teamId})`,
+        );
+      } else {
+        eventsQuery = eventsQuery.eq("created_by", user.id);
+      }
+
+      const { data: eventRows, error: eventsErr } = await eventsQuery.limit(3);
+
+      if (eventsErr) {
+        console.log("Home events error:", eventsErr);
+        setUpcomingEvents([]);
+      } else {
+        setUpcomingEvents(eventRows || []);
+      }
+
+      // Next workout for the team
+      if (teamId) {
+        const { data: workoutRow, error: workoutErr } = await supabase
+          .from("workout_assignments")
+          .select("*")
+          .eq("team_id", teamId)
+          .gte("assigned_date", today)
+          .order("assigned_date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (workoutErr) {
+          console.log("Home workout error:", workoutErr);
+          setNextWorkout(null);
+        } else {
+          setNextWorkout(workoutRow || null);
+        }
+      } else {
+        setNextWorkout(null);
+      }
+
+      setHomeLoading(false);
+    }
+
+    loadHomeData();
+  }, [loadingRole, loadingTeam, teamId, role]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* HEADER */}
         <View style={styles.header}>
@@ -46,23 +123,23 @@ function HomeScreen() {
 
         {/*COACH DASHBOARD*/}
         {!loadingRole && role === "coach" && (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => router.push("/(tabs)/CoachDashboard")}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.iconPurple}>
-                  <ClipboardCheck size={28} color="#8B5CF6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>Coach Dashboard</Text>
-                  <Text style={styles.cardSubtitle}>
-                    Review athlete check-ins & logs
-                  </Text>
-                </View>
-                <ChevronRight size={20} color="#9CA3AF" />
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => router.push("/(tabs)/CoachDashboard")}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.iconPurple}>
+                <ClipboardCheck size={28} color="#8B5CF6" />
               </View>
-            </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Coach Dashboard</Text>
+                <Text style={styles.cardSubtitle}>
+                  Review athlete check-ins & logs
+                </Text>
+              </View>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* CALENDAR CARD */}
@@ -81,12 +158,18 @@ function HomeScreen() {
             <ChevronRight size={20} color="#9CA3AF" />
           </View>
           <View style={styles.eventsContainer}>
-            {todaysEvents.map((event, index) => (
-              <View key={index} style={styles.eventRow}>
-                <Text style={styles.eventTime}>{event.time}</Text>
-                <Text style={styles.eventTitle}>{event.title}</Text>
-              </View>
-            ))}
+            {homeLoading ? (
+              <Text style={styles.cardSubtitle}>Loading...</Text>
+            ) : upcomingEvents.length === 0 ? (
+              <Text style={styles.cardSubtitle}>No upcoming events</Text>
+            ) : (
+              upcomingEvents.map((event) => (
+                <View key={event.id} style={styles.eventRow}>
+                  <Text style={styles.eventTime}>{event.time_label}</Text>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                </View>
+              ))
+            )}
           </View>
         </TouchableOpacity>
 
@@ -125,17 +208,26 @@ function HomeScreen() {
             <ChevronRight size={20} color="#9CA3AF" />
           </View>
           <View style={styles.workoutBox}>
-            <Text style={styles.workoutBoxTitle}>Today's Workout</Text>
-            <Text style={styles.workoutName}>{todaysWorkout.title}</Text>
-            <Text style={styles.workoutTime}>
-              Starts at {todaysWorkout.time}
-            </Text>
+            <Text style={styles.workoutBoxTitle}>Next Workout</Text>
+            {homeLoading ? (
+              <Text style={styles.workoutName}>Loading...</Text>
+            ) : nextWorkout ? (
+              <>
+                <Text style={styles.workoutName}>{nextWorkout.title}</Text>
+                <Text style={styles.workoutTime}>
+                  {nextWorkout.assigned_date}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.workoutName}>No upcoming workout</Text>
+            )}
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={async () => {
             await supabase.auth.signOut();
+            router.replace("/login");
           }}
           style={{
             alignSelf: "flex-end",
@@ -167,7 +259,7 @@ function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -223,7 +315,7 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
   },
   eventRow: { flexDirection: "row", marginBottom: 6 },
-  eventTime: { color: "#6B7280", width: 70, fontSize: 12 },
+  eventTime: { color: "#6B7280", width: 110, fontSize: 12 },
   eventTitle: { fontSize: 14 },
   workoutBox: {
     backgroundColor: "#F5F3FF",

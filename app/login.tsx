@@ -27,6 +27,7 @@ export default function Login() {
 
   async function handleLogin() {
     setStatus("Signing in...");
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
@@ -34,28 +35,32 @@ export default function Login() {
 
     if (error) return showError("Login Error", error);
 
+    if (!data?.session) {
+      return showError("Login Error", new Error("No session returned"));
+    }
+
     setStatus("Success! Redirecting...");
-    router.replace("/(tabs)");
+    router.replace("/");
   }
 
   async function handleSignUp() {
-  setStatus("Creating account...");
+    setStatus("Creating account...");
 
-  const { error } = await supabase.auth.signUp({
-    email: email.trim(),
-    password,
-    options: {
-      data: {
-        role,
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          role,
+        },
       },
-    },
-  });
+    });
 
-  if (error) return showError("Sign Up Error", error);
+    if (error) return showError("Sign Up Error", error);
 
-  setStatus("Account created! You can sign in now.");
-  Alert.alert("Success", `Created ${role} account. Now sign in.`);
-}
+    setStatus("Account created! You can sign in now.");
+    Alert.alert("Success", `Created ${role} account. Now sign in.`);
+  }
 
   return (
     <View style={{ flex: 1, justifyContent: "center", padding: 20, gap: 10 }}>
