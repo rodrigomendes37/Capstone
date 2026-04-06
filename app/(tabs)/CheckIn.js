@@ -351,7 +351,6 @@ export default function CheckInScreen() {
     console.log("teamId:", teamId);
     console.log("athleteRows:", JSON.stringify(athleteRows, null, 2));
     console.log("todayCheckins:", JSON.stringify(todayCheckins, null, 2));
-    console.log("submittedSet:", Array.from(submittedSet));
 
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
