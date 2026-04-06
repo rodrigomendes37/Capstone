@@ -121,27 +121,6 @@ function HomeScreen() {
           </Text>
         </View>
 
-        {/*COACH DASHBOARD*/}
-        {!loadingRole && role === "coach" && (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push("/(tabs)/CoachDashboard")}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.iconPurple}>
-                <ClipboardCheck size={28} color="#8B5CF6" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Coach Dashboard</Text>
-                <Text style={styles.cardSubtitle}>
-                  Review athlete check-ins & logs
-                </Text>
-              </View>
-              <ChevronRight size={20} color="#9CA3AF" />
-            </View>
-          </TouchableOpacity>
-        )}
-
         {/* CALENDAR CARD */}
         <TouchableOpacity
           style={styles.card}

@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
+import TimePickerField from "../components/TimePickerField";
 
 function generateUUID() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
@@ -141,6 +142,22 @@ export default function CalendarScreen() {
   }, [teamId, role]);
 
   if (loadingRole || loadingTeam) return null;
+
+  if (!teamId && !isCoach) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}>
+            Team assignment pending
+          </Text>
+          <Text style={{ textAlign: "center", color: "#6B7280" }}>
+            Your account was created successfully, but you have not been assigned to a team yet.
+            Please contact your coach or administrator.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const monthName = currentMonth.toLocaleDateString("en-US", {
     month: "long",
@@ -776,18 +793,16 @@ export default function CalendarScreen() {
               }}
             />
 
-            <TextInput
-              placeholder="Start Time (e.g., 08:00)"
+            <TimePickerField
+              label="Start Time"
               value={startTime}
-              onChangeText={setStartTime}
-              style={styles.input}
+              onChange={setStartTime}
             />
 
-            <TextInput
-              placeholder="End Time (e.g., 09:30)"
+            <TimePickerField
+              label="End Time"
               value={endTime}
-              onChangeText={setEndTime}
-              style={[styles.input, { marginTop: 10 }]}
+              onChange={setEndTime}
             />
 
             {!editingEvent?.assignment_id && (

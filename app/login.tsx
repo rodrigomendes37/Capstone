@@ -8,11 +8,10 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // "athlete" | "coach"
-  const [role, setRole] = useState("athlete");
-
   const [status, setStatus] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
   function showError(title: string, error: unknown) {
     const msg =
@@ -44,22 +43,41 @@ export default function Login() {
   }
 
   async function handleSignUp() {
+    if (!firstName.trim() || !lastName.trim()) {
+      Alert.alert("Missing information", "Please enter first and last name.");
+      return;
+    }
+
     setStatus("Creating account...");
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: {
-        data: {
-          role,
-        },
-      },
     });
 
     if (error) return showError("Sign Up Error", error);
 
+    const userId = data?.user?.id;
+
+    if (userId) {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+        })
+        .eq("user_id", userId);
+
+      if (profileError) {
+        return showError("Profile Save Error", profileError);
+      }
+    }
+
     setStatus("Account created! You can sign in now.");
-    Alert.alert("Success", `Created ${role} account. Now sign in.`);
+    Alert.alert(
+      "Success",
+      "Account created. Your access level and team assignment will be set by the app administrator."
+    );
   }
 
   return (
@@ -68,6 +86,34 @@ export default function Login() {
 
       {!!status && (
         <Text style={{ marginBottom: 10, opacity: 0.8 }}>{status}</Text>
+      )}
+
+      {isCreatingAccount && (
+        <>
+          <Text>First Name</Text>
+          <TextInput
+            value={firstName}
+            onChangeText={setFirstName}
+            style={{
+              borderWidth: 1,
+              padding: 10,
+              borderRadius: 6,
+              marginBottom: 10,
+            }}
+          />
+
+          <Text>Last Name</Text>
+          <TextInput
+            value={lastName}
+            onChangeText={setLastName}
+            style={{
+              borderWidth: 1,
+              padding: 10,
+              borderRadius: 6,
+              marginBottom: 10,
+            }}
+          />
+        </>
       )}
 
       <Text>Email</Text>
@@ -97,75 +143,73 @@ export default function Login() {
         onChangeText={setPassword}
       />
 
-      {/* Role toggle */}
-      <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
-        <TouchableOpacity
-          onPress={() => setRole("athlete")}
-          style={{
-            flex: 1,
-            padding: 12,
-            borderRadius: 8,
-            borderWidth: 1,
-            backgroundColor: role === "athlete" ? "#6b46c1" : "transparent",
-          }}
-        >
-          <Text
+      {!isCreatingAccount ? (
+        <>
+          <TouchableOpacity
+            onPress={handleLogin}
             style={{
-              textAlign: "center",
-              color: role === "athlete" ? "white" : "black",
+              backgroundColor: "#6b46c1",
+              padding: 15,
+              borderRadius: 8,
+              marginBottom: 8,
             }}
           >
-            Athlete
-          </Text>
-        </TouchableOpacity>
+            <Text style={{ color: "white", textAlign: "center", fontSize: 18 }}>
+              Sign In
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setRole("coach")}
-          style={{
-            flex: 1,
-            padding: 12,
-            borderRadius: 8,
-            borderWidth: 1,
-            backgroundColor: role === "coach" ? "#6b46c1" : "transparent",
-          }}
-        >
-          <Text
+          <TouchableOpacity
+            onPress={() => {
+              setIsCreatingAccount(true);
+              setStatus("");
+            }}
             style={{
-              textAlign: "center",
-              color: role === "coach" ? "white" : "black",
+              borderWidth: 1,
+              padding: 15,
+              borderRadius: 8,
             }}
           >
-            Coach
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Text style={{ textAlign: "center", fontSize: 16 }}>
+              Create Account
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <TouchableOpacity
+            onPress={handleSignUp}
+            style={{
+              backgroundColor: "#6b46c1",
+              padding: 15,
+              borderRadius: 8,
+              marginBottom: 8,
+            }}
+          >
+            <Text style={{ color: "white", textAlign: "center", fontSize: 18 }}>
+              Create Account
+            </Text>
+          </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={handleLogin}
-        style={{
-          backgroundColor: "#6b46c1",
-          padding: 15,
-          borderRadius: 8,
-          marginBottom: 8,
-        }}
-      >
-        <Text style={{ color: "white", textAlign: "center", fontSize: 18 }}>
-          Sign In
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={handleSignUp}
-        style={{
-          borderWidth: 1,
-          padding: 15,
-          borderRadius: 8,
-        }}
-      >
-        <Text style={{ textAlign: "center", fontSize: 16 }}>
-          Create Account
-        </Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setIsCreatingAccount(false);
+              setFirstName("");
+              setLastName("");
+              setStatus("");
+            }}
+            style={{
+              borderWidth: 1,
+              padding: 15,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ textAlign: "center", fontSize: 16 }}>
+              Back to Sign In
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }

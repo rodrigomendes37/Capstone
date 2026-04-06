@@ -1,15 +1,16 @@
 {
   "expo": {
-    "name": "CollegeAthleteWellnessApp",
-    "slug": "CollegeAthleteWellnessApp",
+    "name": "College Athlete Wellness",
+    "slug": "college-athlete-wellness",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "collegeathletewellnessapp",
+    "scheme": "collegeathletewellness",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "edu.unca.collegeathletewellness"
     },
     "android": {
       "adaptiveIcon": {
@@ -39,11 +40,16 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "SUPABASE_URL": "",
+      "SUPABASE_ANON_KEY": ""
     }
   }
 }

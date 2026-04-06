@@ -15,6 +15,7 @@ import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
 import { SafeAreaView } from "react-native-safe-area-context";
+import TimePickerField from "../components/TimePickerField";
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -56,6 +57,7 @@ export default function TrainingLog() {
   // athlete submission state
   const [submission, setSubmission] = useState({});
   const [expandedAthlete, setExpandedAthlete] = useState(null);
+  const [athleteNames, setAthleteNames] = useState({});
 
   async function loadTrainingData() {
     if (!teamId) return;
@@ -82,6 +84,7 @@ export default function TrainingLog() {
       console.log("Load assignment error:", assignmentErr);
       setAssignment(null);
       setLogs([]);
+      setAthleteNames({});
       setLoadingData(false);
       return;
     }
@@ -97,11 +100,39 @@ export default function TrainingLog() {
       if (logsErr) {
         console.log("Load workout logs error:", logsErr);
         setLogs([]);
+        setAthleteNames({});
       } else {
-        setLogs(logsData || []);
+        const safeLogs = logsData || [];
+        setLogs(safeLogs);
+
+        const athleteIds = [
+          ...new Set(safeLogs.map((log) => log.athlete_user_id).filter(Boolean)),
+        ];
+
+        if (athleteIds.length > 0) {
+          const { data: profileData, error: profileErr } = await supabase
+            .from("profiles")
+            .select("user_id, first_name, last_name")
+            .in("user_id", athleteIds);
+
+          if (profileErr) {
+            console.log("Load athlete profiles error:", profileErr);
+            setAthleteNames({});
+          } else {
+            const nameMap = {};
+            for (const profile of profileData || []) {
+              const fullName =
+                `${profile.first_name || ""} ${profile.last_name || ""}`.trim();
+
+              nameMap[profile.user_id] =
+                fullName || `Athlete ${String(profile.user_id).slice(0, 8)}…`;
+            }
+            setAthleteNames(nameMap);
+          }
+        } else {
+          setAthleteNames({});
+        }
       }
-    } else {
-      setLogs([]);
     }
 
     const { data: nextData, error: nextErr } = await supabase
@@ -233,6 +264,7 @@ export default function TrainingLog() {
     Alert.alert("Deleted", "Workout assignment deleted successfully.");
     setAssignment(null);
     setLogs([]);
+    setAthleteNames({});
     await loadTrainingData();
     router.replace("/");
   }
@@ -267,6 +299,22 @@ export default function TrainingLog() {
 
   if (loadingRole || loadingTeam || loadingData) return null;
 
+  if (!teamId && !isCoach) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}>
+            Team assignment pending
+          </Text>
+          <Text style={{ textAlign: "center", color: "#6B7280" }}>
+            Your account was created successfully, but you have not been assigned to a team yet.
+            Please contact your coach or administrator.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (isCoach) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -300,18 +348,16 @@ export default function TrainingLog() {
               style={[styles.input, { marginTop: 10 }]}
             />
 
-            <TextInput
-              placeholder="Start Time (08:00)"
+            <TimePickerField
+              label="Start Time"
               value={startTime}
-              onChangeText={setStartTime}
-              style={[styles.input, { marginTop: 10 }]}
+              onChange={setStartTime}
             />
 
-            <TextInput
-              placeholder="End Time (09:00)"
+            <TimePickerField
+              label="End Time"
               value={endTime}
-              onChangeText={setEndTime}
-              style={[styles.input, { marginTop: 10 }]}
+              onChange={setEndTime}
             />
 
             <TextInput
@@ -419,7 +465,7 @@ export default function TrainingLog() {
                     }
                   >
                     <Text style={{ fontWeight: "600", fontSize: 16 }}>
-                      Athlete {String(log.athlete_user_id).slice(0, 8)}…
+                      {athleteNames[log.athlete_user_id] || `Athlete ${String(log.athlete_user_id).slice(0, 8)}…`}
                     </Text>
                     <Text style={{ color: "#6B7280", marginTop: 4 }}>
                       Tap to {expandedAthlete === log.id ? "hide" : "view"}{" "}
