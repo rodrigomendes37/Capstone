@@ -218,25 +218,6 @@ function HomeScreen() {
         >
           <Text>Sign Out</Text>
         </TouchableOpacity>
-
-        {/* WEEKLY STATS */}
-        <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>This Week</Text>
-          <View style={styles.statsRow}>
-            <View>
-              <Text style={styles.statNumber}>5</Text>
-              <Text style={styles.statLabel}>Sessions</Text>
-            </View>
-            <View>
-              <Text style={styles.statNumber}>12</Text>
-              <Text style={styles.statLabel}>Check-ins</Text>
-            </View>
-            <View>
-              <Text style={styles.statNumber}>85%</Text>
-              <Text style={styles.statLabel}>Goals Met</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

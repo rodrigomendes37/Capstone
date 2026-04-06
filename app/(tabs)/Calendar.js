@@ -30,7 +30,7 @@ function getStartMinuteOffset(timeLabel = "") {
   if (!start || !start.includes(":")) return 0;
 
   const minute = Number(start.split(":")[1] || 0);
-  return (minute / 60) * 50;
+  return (minute / 60) * 80;
 }
 
 function getLocalDateString(date = new Date()) {
@@ -917,7 +917,7 @@ export default function CalendarScreen() {
                       styles.eventBlock,
                       {
                         top: getStartMinuteOffset(event.time_label),
-                        height: Math.max(event.duration * 50, 64),
+                        height: Math.max(event.duration * 80, 64),
                       },
                     ]}
                   >
