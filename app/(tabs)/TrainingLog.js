@@ -77,11 +77,8 @@ export default function TrainingLog() {
       .limit(1)
       .maybeSingle();
 
-    console.log("todayString:", todayString);
-    console.log("assignmentData:", assignmentData);
 
     if (assignmentErr) {
-      console.log("Load assignment error:", assignmentErr);
       setAssignment(null);
       setLogs([]);
       setAthleteNames({});
@@ -98,7 +95,6 @@ export default function TrainingLog() {
         .eq("assignment_id", assignmentData.id);
 
       if (logsErr) {
-        console.log("Load workout logs error:", logsErr);
         setLogs([]);
         setAthleteNames({});
       } else {
@@ -116,7 +112,6 @@ export default function TrainingLog() {
             .in("user_id", athleteIds);
 
           if (profileErr) {
-            console.log("Load athlete profiles error:", profileErr);
             setAthleteNames({});
           } else {
             const nameMap = {};
@@ -145,7 +140,6 @@ export default function TrainingLog() {
       .maybeSingle();
 
     if (nextErr) {
-      console.log("Load next assignment error:", nextErr);
       setNextAssignment(null);
     } else {
       setNextAssignment(nextData || null);
@@ -217,7 +211,6 @@ export default function TrainingLog() {
       .single();
 
     if (assignmentError) {
-      console.log("Save assignment error:", assignmentError);
       Alert.alert("Save failed", "Could not save the workout assignment.");
       return;
     }
@@ -238,7 +231,6 @@ export default function TrainingLog() {
       });
 
     if (calendarError) {
-      console.log("Save calendar event error:", calendarError);
       Alert.alert("Save failed", "Could not add the workout to the calendar.");
       return;
     }
@@ -257,7 +249,6 @@ export default function TrainingLog() {
       .eq("id", assignment.id);
 
     if (error) {
-      console.log("Delete assignment error:", error);
       return;
     }
 
@@ -289,7 +280,6 @@ export default function TrainingLog() {
     );
 
     if (error) {
-      console.log("Submit workout log error:", error);
       return;
     }
 

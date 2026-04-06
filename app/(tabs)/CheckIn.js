@@ -65,7 +65,6 @@ export default function CheckInScreen() {
         .eq("role", "athlete");
 
       if (athletesErr) {
-        console.log("Load athletes error:", athletesErr);
         setAthleteRows([]);
         setTodayCheckins([]);
         setTrendCheckins([]);
@@ -93,7 +92,6 @@ export default function CheckInScreen() {
         .order("date", { ascending: true });
 
       if (checkinsErr) {
-        console.log("Load checkins error:", checkinsErr);
         setTodayCheckins([]);
         setTrendCheckins([]);
         setAthleteNames({});
@@ -121,7 +119,6 @@ export default function CheckInScreen() {
           .in("user_id", athleteIds);
 
         if (profileErr) {
-          console.log("Load athlete profiles error:", profileErr);
           setAthleteNames({});
         } else {
           const nameMap = {};
@@ -172,7 +169,7 @@ export default function CheckInScreen() {
         .maybeSingle();
 
       if (error) {
-        console.log("Load athlete today check-in error:", error);
+
         setAlreadyCheckedInToday(false);
       } else {
         setAlreadyCheckedInToday(!!data);
@@ -207,7 +204,6 @@ export default function CheckInScreen() {
       return;
     }
 
-    console.log("HANDLE SUBMIT FIRED");
 
     try {
       const {
@@ -216,17 +212,14 @@ export default function CheckInScreen() {
       } = await supabase.auth.getUser();
 
       if (userErr) {
-        console.log("Supabase getUser error:", userErr);
         return;
       }
 
       if (!user) {
-        console.log("No user logged in!");
         return;
       }
 
       if (!user || !user.id) {
-        console.log("No valid user for check-in!");
         Alert.alert("Login required", "Please log in first.");
         return;
       }
@@ -249,16 +242,15 @@ export default function CheckInScreen() {
       );
 
       if (error) {
-        console.log("Error inserting check-in:", error);
-        Alert.alert("Check-in failed", JSON.stringify(error));
+        Alert.alert("Check-in failed", "Could not save the check-in.");
         return;
       }
 
       setAlreadyCheckedInToday(true);
       Alert.alert("Saved", "Your check-in for today has been recorded.");
       router.replace("/");
-    } catch (err) {
-      console.log("Unexpected error:", err);
+    } catch {
+      Alert.alert("Check-in failed", "Could not save the check-in.");
     }
   };
 
@@ -347,10 +339,6 @@ export default function CheckInScreen() {
   }
 
   if (isCoach) {  
-
-    console.log("teamId:", teamId);
-    console.log("athleteRows:", JSON.stringify(athleteRows, null, 2));
-    console.log("todayCheckins:", JSON.stringify(todayCheckins, null, 2));
 
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>

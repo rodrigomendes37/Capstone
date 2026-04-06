@@ -16,10 +16,6 @@ export default function ProtectedRoute({ children }) {
 
       if (!mounted) return;
 
-      if (error) {
-        console.log("ProtectedRoute getSession error:", error);
-      }
-
       setSession(data?.session ?? null);
       setIsLoading(false);
     }

@@ -127,7 +127,6 @@ export default function CalendarScreen() {
     const { data, error } = await query;
 
     if (error) {
-      console.log("Load calendar events error:", error);
       setCalendarEvents([]);
     } else {
       setCalendarEvents(data || []);
@@ -230,7 +229,6 @@ export default function CalendarScreen() {
         .eq("id", editingEvent.id);
 
       if (error) {
-        console.log("Update calendar event error:", error);
         return;
       }
 
@@ -268,7 +266,6 @@ export default function CalendarScreen() {
       const { error } = await supabase.from("calendar_events").insert(payload);
 
       if (error) {
-        console.log("Add calendar event error:", error);
         return;
       }
     } else {
@@ -309,10 +306,6 @@ export default function CalendarScreen() {
       const rows = [];
       const cursor = new Date(startDate);
 
-      console.log("recurringDays selected:", recurringDays);
-      console.log("recurringStartDate:", recurringStartDate);
-      console.log("recurringUntil:", recurringUntil);
-
       while (cursor <= untilDate) {
         const dayCode = cursor.toLocaleDateString("en-US", {
           weekday: "short",
@@ -335,13 +328,6 @@ export default function CalendarScreen() {
           });
         }
 
-        console.log(
-          "checking date:",
-          getLocalDateString(cursor),
-          "weekday:",
-          cursor.toLocaleDateString("en-US", { weekday: "short" }),
-        );
-
         cursor.setDate(cursor.getDate() + 1);
       }
 
@@ -356,10 +342,6 @@ export default function CalendarScreen() {
       const { error } = await supabase.from("calendar_events").insert(rows);
 
       if (error) {
-        console.log(
-          "Add recurring calendar events error:",
-          JSON.stringify(error, null, 2),
-        );
         Alert.alert("Save failed", "Could not save the recurring events.");
         return;
       }
@@ -389,7 +371,6 @@ export default function CalendarScreen() {
         .eq("id", event.assignment_id);
 
       if (error) {
-        console.log("Remove linked workout assignment error:", error);
         return;
       }
 
@@ -416,7 +397,6 @@ export default function CalendarScreen() {
                 .eq("id", event.id);
 
               if (error) {
-                console.log("Remove single recurring event error:", error);
                 return;
               }
 
@@ -433,7 +413,6 @@ export default function CalendarScreen() {
                 .eq("recurrence_group_id", event.recurrence_group_id);
 
               if (error) {
-                console.log("Remove recurring series error:", error);
                 return;
               }
 
@@ -453,7 +432,6 @@ export default function CalendarScreen() {
       .eq("id", event.id);
 
     if (error) {
-      console.log("Remove calendar event error:", error);
       return;
     }
 

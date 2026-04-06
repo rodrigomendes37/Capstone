@@ -75,7 +75,6 @@ function HomeScreen() {
       const { data: eventRows, error: eventsErr } = await eventsQuery.limit(3);
 
       if (eventsErr) {
-        console.log("Home events error:", eventsErr);
         setUpcomingEvents([]);
       } else {
         setUpcomingEvents(eventRows || []);
@@ -93,7 +92,6 @@ function HomeScreen() {
           .maybeSingle();
 
         if (workoutErr) {
-          console.log("Home workout error:", workoutErr);
           setNextWorkout(null);
         } else {
           setNextWorkout(workoutRow || null);
