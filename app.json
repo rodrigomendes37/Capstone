@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "edu.unca.collegeathletewellness",
-      "jsEngine": "jsc"
+      "jsEngine": "hermes"
     },
     "android": {
       "adaptiveIcon": {
@@ -45,6 +45,11 @@
       ],
       "expo-secure-store"
     ],
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
+    },
     "extra": {
       "SUPABASE_URL": "",
       "SUPABASE_ANON_KEY": ""
