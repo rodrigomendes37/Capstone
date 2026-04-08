@@ -11,8 +11,11 @@
     "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "edu.unca.collegeathletewellness",
-      "jsEngine": "hermes"
+      "bundleIdentifier": "edu.unca.collegeathletewellness.sarah",
+      "jsEngine": "hermes",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +26,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "edu.unca.collegeathletewellness"
+      "package": "edu.unca.collegeathletewellness.sarah"
     },
     "web": {
       "output": "static",
@@ -48,11 +51,19 @@
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/1fb9a590-9afe-4ef0-934c-90bab2680723"
     },
     "extra": {
       "SUPABASE_URL": "",
-      "SUPABASE_ANON_KEY": ""
+      "SUPABASE_ANON_KEY": "",
+      "router": {},
+      "eas": {
+        "projectId": "1fb9a590-9afe-4ef0-934c-90bab2680723"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
