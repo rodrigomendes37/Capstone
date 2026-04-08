@@ -1,0 +1,22 @@
+env: load .env.local .env
+env: export SUPABASE_ANON_KEY SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_SUPABASE_URL
+Running 17 checks on your project...
+✔ Check package.json for common issues
+✔ Check Expo config for common issues
+✔ Check for lock file
+✔ Check for issues with Metro config
+✔ Check dependencies for packages that should not be installed directly
+✔ Check npm/yarn versions
+✔ Check if the project meets version requirements for submission to app stores
+✔ Check for common project setup issues
+✔ Check that required peer dependencies are installed
+✔ Check for app config fields that may not be synced in a non-CNG project
+✔ Check Expo config (app.json/ app.config.js) schema
+✔ Check that native modules do not use incompatible support packages
+✔ Check that packages match versions required by installed Expo SDK
+✔ Check for legacy global CLI installed locally
+✔ Check that no duplicate dependencies are installed
+✔ Check native tooling versions
+✔ Validate packages against React Native Directory package metadata
+
+17/17 checks passed. No issues detected!
