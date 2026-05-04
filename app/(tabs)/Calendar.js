@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useRouter } from "expo-router";
 import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
@@ -43,7 +42,6 @@ function getLocalDateString(date = new Date()) {
 export default function CalendarScreen() {
   const router = useRouter();
 
-  // ALL state hooks first
   const [selectedDay, setSelectedDay] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -112,17 +110,10 @@ export default function CalendarScreen() {
       .order("event_date", { ascending: true })
       .order("hour", { ascending: true });
 
-    if (isCoach) {
-      // coach sees own personal events + all team events
-      query = query.or(
-        `created_by.eq.${user.id},and(scope.eq.team,team_id.eq.${teamId})`,
-      );
-    } else {
-      // athlete sees own personal events + all team events
-      query = query.or(
-        `created_by.eq.${user.id},and(scope.eq.team,team_id.eq.${teamId})`,
-      );
-    }
+    // Both athletes and coaches see their own events plus shared team events.
+    query = query.or(
+      `created_by.eq.${user.id},and(scope.eq.team,team_id.eq.${teamId})`,
+    );
 
     const { data, error } = await query;
 
@@ -135,6 +126,18 @@ export default function CalendarScreen() {
     setEventsLoading(false);
   }
 
+  function resetEventForm() {
+    setEditingEvent(null);
+    setNewTitle("");
+    setStartTime("");
+    setEndTime("");
+    setEventScope("personal");
+    setIsRecurring(false);
+    setRecurringStartDate("");
+    setRecurringUntil("");
+    setRecurringDays([]);
+  }
+
   useEffect(() => {
     if (!teamId) return;
     loadCalendarEvents();
@@ -145,7 +148,14 @@ export default function CalendarScreen() {
   if (!teamId && !isCoach) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+          }}
+        >
           <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}>
             Team assignment pending
           </Text>
@@ -229,17 +239,11 @@ export default function CalendarScreen() {
         .eq("id", editingEvent.id);
 
       if (error) {
+        Alert.alert("Save failed", "Could not update this event.");
         return;
       }
 
-      setEditingEvent(null);
-      setNewTitle("");
-      setStartTime("");
-      setEndTime("");
-      setIsRecurring(false);
-      setRecurringStartDate("");
-      setRecurringUntil("");
-      setRecurringDays([]);
+      resetEventForm();
       setShowAddForm(false);
 
       await loadCalendarEvents();
@@ -266,6 +270,7 @@ export default function CalendarScreen() {
       const { error } = await supabase.from("calendar_events").insert(payload);
 
       if (error) {
+        Alert.alert("Save failed", "Could not save this event.");
         return;
       }
     } else {
@@ -347,14 +352,7 @@ export default function CalendarScreen() {
       }
     }
 
-    setEditingEvent(null);
-    setNewTitle("");
-    setStartTime("");
-    setEndTime("");
-    setIsRecurring(false);
-    setRecurringStartDate("");
-    setRecurringUntil("");
-    setRecurringDays([]);
+    resetEventForm();
     setShowAddForm(false);
 
     await loadCalendarEvents();
@@ -438,7 +436,6 @@ export default function CalendarScreen() {
     await loadCalendarEvents();
   }
 
-  // Calendar calculations
   const firstDay = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth(),
@@ -456,7 +453,6 @@ export default function CalendarScreen() {
   for (let i = 0; i < startingDayOfWeek; i++) calendarDays.push(null);
   for (let day = 1; day <= daysInMonth; day++) calendarDays.push(day);
 
-  // Hours for day view
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   const formatHour = (hour) => {
@@ -488,7 +484,6 @@ export default function CalendarScreen() {
     );
   }
 
-  // ---------------- MONTHLY VIEW ----------------
   if (!selectedDay) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -497,13 +492,12 @@ export default function CalendarScreen() {
           contentContainerStyle={{ paddingBottom: 120 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()}>
               <ArrowLeft size={24} />
             </TouchableOpacity>
 
-            <Text style={styles.title}>Dashboard</Text>
+            <Text style={styles.title}>Calendar</Text>
 
             <TouchableOpacity
               onPress={() => {
@@ -528,30 +522,18 @@ export default function CalendarScreen() {
                 );
 
                 if (nextShow) {
-                  setNewTitle("");
-                  setStartTime("");
-                  setEndTime("");
-                  setEventScope("personal");
-                  setIsRecurring(false);
+                  resetEventForm();
                   setRecurringStartDate(getLocalDateString(startDate));
-                  setRecurringUntil("");
-                  setRecurringDays([]);
                 }
               }}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-                backgroundColor: "#22C55E",
-              }}
+              style={styles.addButton}
             >
-              <Text style={{ color: "white", fontWeight: "600" }}>
+              <Text style={styles.addButtonText}>
                 {showAddForm ? "Close" : "Add"}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Month Navigation */}
           <View style={styles.monthNav}>
             <TouchableOpacity onPress={goToPreviousMonth}>
               <ChevronLeft size={24} />
@@ -562,7 +544,6 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Weekday Headers */}
           <View style={styles.weekdays}>
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
               <Text key={day} style={styles.weekdayText}>
@@ -571,7 +552,6 @@ export default function CalendarScreen() {
             ))}
           </View>
 
-          {/* Calendar Days */}
           <View style={styles.calendarGrid}>
             {calendarDays.map((day, index) => {
               const hasEvents = day && eventsByDay[day];
@@ -624,7 +604,6 @@ export default function CalendarScreen() {
     );
   }
 
-  // ---------------- DAY VIEW ----------------
   const dayEvents = eventsByDay[selectedDay] || [];
 
   return (
@@ -652,24 +631,13 @@ export default function CalendarScreen() {
                 );
 
                 if (nextShow) {
-                  setNewTitle("");
-                  setStartTime("");
-                  setEndTime("");
-                  setEventScope("personal");
-                  setIsRecurring(false);
+                  resetEventForm();
                   setRecurringStartDate(getLocalDateString(startDate));
-                  setRecurringUntil("");
-                  setRecurringDays([]);
                 }
               }}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-                backgroundColor: "#22C55E",
-              }}
+              style={styles.addButton}
             >
-              <Text style={{ color: "white", fontWeight: "600" }}>
+              <Text style={styles.addButtonText}>
                 {showAddForm ? "Close" : "Add"}
               </Text>
             </TouchableOpacity>
@@ -692,18 +660,8 @@ export default function CalendarScreen() {
           })}
         </Text>
 
-        {/* Add event UI */}
         {showAddForm && (
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 12,
-              padding: 12,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: "#E5E7EB",
-            }}
-          >
+          <View style={styles.formCard}>
             <Text style={{ fontWeight: "700", marginBottom: 8 }}>
               Add Event
             </Text>
@@ -760,15 +718,10 @@ export default function CalendarScreen() {
 
             <TextInput
               placeholder="Title (e.g., Team Lift)"
+              placeholderTextColor="#6B7280"
               value={newTitle}
               onChangeText={setNewTitle}
-              style={{
-                borderWidth: 1,
-                borderColor: "#D1D5DB",
-                borderRadius: 10,
-                padding: 10,
-                marginBottom: 10,
-              }}
+              style={styles.input}
             />
 
             <TimePickerField
@@ -842,6 +795,7 @@ export default function CalendarScreen() {
 
                     <TextInput
                       placeholder="Start date (YYYY-MM-DD)"
+                      placeholderTextColor="#6B7280"
                       value={recurringStartDate}
                       onChangeText={setRecurringStartDate}
                       style={[styles.input, { marginTop: 12 }]}
@@ -849,6 +803,7 @@ export default function CalendarScreen() {
 
                     <TextInput
                       placeholder="Repeat until (YYYY-MM-DD)"
+                      placeholderTextColor="#6B7280"
                       value={recurringUntil}
                       onChangeText={setRecurringUntil}
                       style={[styles.input, { marginTop: 12 }]}
@@ -959,6 +914,23 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingHorizontal: 16,
   },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    backgroundColor: "#FFFFFF",
+    color: "#111827",
+  },
+  formCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
   title: { fontSize: 24, fontWeight: "bold" },
   monthNav: {
     flexDirection: "row",
@@ -1047,4 +1019,14 @@ const styles = StyleSheet.create({
   },
   eventTitle: { fontSize: 12, fontWeight: "600" },
   eventTime: { fontSize: 10, color: "#374151" },
+  addButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#22C55E",
+  },
+  addButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
 });
