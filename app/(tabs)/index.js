@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useRouter } from "expo-router";
 import {
   BookOpen,
@@ -20,7 +19,6 @@ import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
 import ProtectedRoute from "../components/ProtectedRoute";
 
-// Actual HomeScreen component
 function HomeScreen() {
   const router = useRouter();
   const dateString = new Date().toDateString();
@@ -56,7 +54,7 @@ function HomeScreen() {
 
       const today = getLocalDateString(new Date());
 
-      // Calendar events: own personal + team events
+      // Show the next few personal or team events on the home screen
       let eventsQuery = supabase
         .from("calendar_events")
         .select("*")
@@ -80,7 +78,7 @@ function HomeScreen() {
         setUpcomingEvents(eventRows || []);
       }
 
-      // Next workout for the team
+      // If the user belongs to a team, show the next assigned workout.
       if (teamId) {
         const { data: workoutRow, error: workoutErr } = await supabase
           .from("workout_assignments")
@@ -104,12 +102,11 @@ function HomeScreen() {
     }
 
     loadHomeData();
-  }, [loadingRole, loadingTeam, teamId, role]);
+  }, [loadingRole, loadingTeam, teamId]);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Home</Text>
           <Text style={styles.headerSubtitle}>
@@ -119,7 +116,6 @@ function HomeScreen() {
           </Text>
         </View>
 
-        {/* CALENDAR CARD */}
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push("/(tabs)/Calendar")}
@@ -150,7 +146,6 @@ function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* CHECK-IN CARD */}
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push("/(tabs)/CheckIn")}
@@ -167,7 +162,6 @@ function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* TRAINING LOG CARD */}
         <TouchableOpacity
           style={styles.card}
           onPress={() => router.push("/(tabs)/TrainingLog")}
@@ -206,22 +200,15 @@ function HomeScreen() {
             await supabase.auth.signOut();
             router.replace("/login");
           }}
-          style={{
-            alignSelf: "flex-end",
-            padding: 10,
-            borderRadius: 8,
-            borderWidth: 1,
-            marginBottom: 10,
-          }}
+          style={styles.signOutButton}
         >
-          <Text>Sign Out</Text>
+          <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// Wrap HomeScreen with ProtectedRoute
 export default function HomeScreenWrapper() {
   return (
     <ProtectedRoute>
@@ -230,7 +217,6 @@ export default function HomeScreenWrapper() {
   );
 }
 
-// -------- STYLES ----------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB" },
   content: { padding: 20 },
@@ -284,14 +270,17 @@ const styles = StyleSheet.create({
   workoutBoxTitle: { color: "#7C3AED", fontSize: 12 },
   workoutName: { fontSize: 15, marginTop: 2 },
   workoutTime: { fontSize: 12, color: "#6B7280" },
-  statsCard: {
-    backgroundColor: "#1F2937",
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 30,
+  signOutButton: {
+    alignSelf: "flex-end",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    marginBottom: 10,
   },
-  statsTitle: { color: "white", fontSize: 16, marginBottom: 12 },
-  statsRow: { flexDirection: "row", justifyContent: "space-between" },
-  statNumber: { fontSize: 20, color: "white" },
-  statLabel: { color: "#D1D5DB", fontSize: 11 },
+  signOutText: {
+    color: "#374151",
+    fontWeight: "500",
+  },
 });
