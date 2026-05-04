@@ -6,9 +6,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <Stack screenOptions={{ headerShown: false }}>
-
         <Stack.Screen name="login" />
-
         <Stack.Screen name="(tabs)" />
       </Stack>
     </SafeAreaProvider>
