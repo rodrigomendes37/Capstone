@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -11,10 +10,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
-import { SafeAreaView } from "react-native-safe-area-context";
 import TimePickerField from "../components/TimePickerField";
 
 function getLocalDateString(date = new Date()) {
@@ -44,7 +43,7 @@ export default function TrainingLog() {
   const [loadingData, setLoadingData] = useState(false);
   const [nextAssignment, setNextAssignment] = useState(null);
 
-  // coach form state
+  // Coach workout assignment form
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [assignedDate, setAssignedDate] = useState(todayString);
@@ -54,7 +53,7 @@ export default function TrainingLog() {
     { name: "", sets: "", reps: "" },
   ]);
 
-  // athlete submission state
+  // Athlete workout submission and coach review state
   const [submission, setSubmission] = useState({});
   const [expandedAthlete, setExpandedAthlete] = useState(null);
   const [athleteNames, setAthleteNames] = useState({});
@@ -76,7 +75,6 @@ export default function TrainingLog() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-
 
     if (assignmentErr) {
       setAssignment(null);
@@ -152,7 +150,7 @@ export default function TrainingLog() {
     if (loadingRole || loadingTeam) return;
     if (!teamId) return;
     loadTrainingData();
-  }, [loadingRole, loadingTeam, teamId, role]);
+  }, [loadingRole, loadingTeam, teamId]);
 
   function updateExercise(i, patch) {
     setExercises((prev) =>
@@ -189,14 +187,27 @@ export default function TrainingLog() {
 
     const duration = endHour + endMinute / 60 - (startHour + startMinute / 60);
 
+    if (!title.trim()) {
+      Alert.alert("Missing title", "Please enter a workout title.");
+      return;
+    }
+
+    if (Number.isNaN(duration) || duration <= 0) {
+      Alert.alert("Invalid time", "End time must be after start time.");
+      return;
+    }
+
     const {
       data: { user },
       error: userErr,
     } = await supabase.auth.getUser();
 
-    if (userErr || !user) return;
+    if (userErr || !user) {
+      Alert.alert("Login required", "Please log in first.");
+      return;
+    }
 
-    // 1) Save workout assignment
+    // Save the workout first so the calendar event can link back to it
     const { data: assignmentInsert, error: assignmentError } = await supabase
       .from("workout_assignments")
       .insert({
@@ -215,7 +226,7 @@ export default function TrainingLog() {
       return;
     }
 
-    // 2) Create matching calendar event for the team
+    // Add the workout to the team calendar.
     const { error: calendarError } = await supabase
       .from("calendar_events")
       .insert({
@@ -249,6 +260,7 @@ export default function TrainingLog() {
       .eq("id", assignment.id);
 
     if (error) {
+      Alert.alert("Delete failed", "Could not delete this workout assignment.");
       return;
     }
 
@@ -268,7 +280,10 @@ export default function TrainingLog() {
       error: userErr,
     } = await supabase.auth.getUser();
 
-    if (userErr || !user) return;
+    if (userErr || !user) {
+      Alert.alert("Login required", "Please log in first.");
+      return;
+    }
 
     const { error } = await supabase.from("workout_logs").upsert(
       {
@@ -280,10 +295,12 @@ export default function TrainingLog() {
     );
 
     if (error) {
+      Alert.alert("Submit failed", "Could not save your workout log.");
       return;
     }
 
     await loadTrainingData();
+    Alert.alert("Saved", "Your workout log has been submitted.");
     router.replace("/");
   }
 
@@ -292,13 +309,20 @@ export default function TrainingLog() {
   if (!teamId && !isCoach) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+          }}
+        >
           <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 8 }}>
             Team assignment pending
           </Text>
           <Text style={{ textAlign: "center", color: "#6B7280" }}>
-            Your account was created successfully, but you have not been assigned to a team yet.
-            Please contact your coach or administrator.
+            Your account was created successfully, but you have not been assigned 
+            to a team yet. Please contact your coach or administrator.
           </Text>
         </View>
       </SafeAreaView>
@@ -326,6 +350,7 @@ export default function TrainingLog() {
 
             <TextInput
               placeholder="Workout title"
+              placeholderTextColor="#6B7280"
               value={title}
               onChangeText={setTitle}
               style={styles.input}
@@ -333,6 +358,7 @@ export default function TrainingLog() {
 
             <TextInput
               placeholder="Assigned date (YYYY-MM-DD)"
+              placeholderTextColor="#6B7280"
               value={assignedDate}
               onChangeText={setAssignedDate}
               style={[styles.input, { marginTop: 10 }]}
@@ -352,6 +378,7 @@ export default function TrainingLog() {
 
             <TextInput
               placeholder="Notes"
+              placeholderTextColor="#6B7280"
               value={notes}
               onChangeText={setNotes}
               multiline
@@ -368,6 +395,7 @@ export default function TrainingLog() {
               <View key={i} style={{ marginBottom: 12 }}>
                 <TextInput
                   placeholder="Exercise name"
+                  placeholderTextColor="#6B7280"
                   value={ex.name}
                   onChangeText={(v) => updateExercise(i, { name: v })}
                   style={styles.input}
@@ -376,6 +404,7 @@ export default function TrainingLog() {
                 <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
                   <TextInput
                     placeholder="Sets"
+                    placeholderTextColor="#6B7280"
                     value={ex.sets}
                     onChangeText={(v) => updateExercise(i, { sets: v })}
                     keyboardType="numeric"
@@ -383,6 +412,7 @@ export default function TrainingLog() {
                   />
                   <TextInput
                     placeholder="Reps"
+                    placeholderTextColor="#6B7280"
                     value={ex.reps}
                     onChangeText={(v) => updateExercise(i, { reps: v })}
                     keyboardType="numeric"
@@ -455,7 +485,8 @@ export default function TrainingLog() {
                     }
                   >
                     <Text style={{ fontWeight: "600", fontSize: 16 }}>
-                      {athleteNames[log.athlete_user_id] || `Athlete ${String(log.athlete_user_id).slice(0, 8)}…`}
+                      {athleteNames[log.athlete_user_id] ||
+                        `Athlete ${String(log.athlete_user_id).slice(0, 8)}…`}
                     </Text>
                     <Text style={{ color: "#6B7280", marginTop: 4 }}>
                       Tap to {expandedAthlete === log.id ? "hide" : "view"}{" "}
@@ -564,6 +595,7 @@ export default function TrainingLog() {
                     updateSubmission(exerciseIndex, i, text)
                   }
                   placeholder="Weight / Time"
+                  placeholderTextColor="#6B7280"
                   keyboardType="numeric"
                 />
                 <Text style={styles.lbs}>lbs</Text>
@@ -621,6 +653,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
     marginRight: 8,
+    backgroundColor: "#FFFFFF",
+    color: "#111827",
   },
   lbs: { width: 30, fontSize: 14, color: "#6B7280" },
   submitButton: {
