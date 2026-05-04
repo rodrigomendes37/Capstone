@@ -1,50 +1,60 @@
-# Welcome to your Expo app 👋
+# College Athlete Wellness App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+College Athlete Wellness is a mobile application built for student-athletes and coaches to centralize wellness check-ins, training logs, scheduling, and team communication.
 
-## Get started
+This project was developed as my CSCI 481 Capstone project at UNC Asheville.
 
-1. Install dependencies
+## Project Overview
 
-   ```bash
-   npm install
-   ```
+Student-athletes often manage training, games, academics, travel, and recovery across several different tools. This app brings the main daily workflow into one place so athletes can enter useful data and coaches can review team-level information more easily.
 
-2. Start the app
+The app supports two main user experiences:
 
-   ```bash
-   npx expo start
-   ```
+- **Athletes** can complete daily wellness check-ins, view schedules, and submit workout log information.
+- **Coaches** can review athlete check-ins, view trends, create team events, assign workouts, and review training submissions.
 
-In the output, you'll find options to open the app in a
+## Main Features
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- Supabase authentication
+- Role-based athlete and coach experiences
+- Daily athlete wellness check-ins
+- One check-in per athlete per day
+- Coach check-in review and trend visibility
+- Training log submission and workout assignment
+- Personal and team calendar events
+- Recurring calendar events
+- Team membership-based data access
+- TestFlight deployment using EAS
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Tech Stack
 
-## Get a fresh project
+- **Frontend:** Expo React Native
+- **Routing:** Expo Router
+- **Backend / Database:** Supabase
+- **Authentication:** Supabase Auth
+- **Database Security:** Supabase Row Level Security policies
+- **Deployment:** EAS Build and TestFlight
 
-When you're ready, run:
+## Database Design
+
+The database centers around user profiles and team membership.
+
+Key tables include:
+
+- `profiles`
+- `teams`
+- `team_memberships`
+- `checkins`
+- `workout_assignments`
+- `workout_logs`
+- `calendar_events`
+
+Supabase Auth handles user accounts through `auth.users`, while app-specific user data is stored in `profiles`. Row Level Security policies are used to control access so athletes and coaches only access the data they are supposed to see.
+
+## Running the Project Locally
+
+Install dependencies:
 
 ```bash
-npm run reset-project
+npm install
 ```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
