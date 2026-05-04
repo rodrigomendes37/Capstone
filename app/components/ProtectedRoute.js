@@ -9,12 +9,12 @@ export default function ProtectedRoute({ children }) {
   const [session, setSession] = useState(null);
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
     async function loadSession() {
-      const { data, error } = await supabase.auth.getSession();
+      const { data } = await supabase.auth.getSession();
 
-      if (!mounted) return;
+      if (!isMounted) return;
 
       setSession(data?.session ?? null);
       setIsLoading(false);
@@ -25,13 +25,14 @@ export default function ProtectedRoute({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (!mounted) return;
+      if (!isMounted) return;
+
       setSession(nextSession ?? null);
       setIsLoading(false);
     });
 
     return () => {
-      mounted = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
