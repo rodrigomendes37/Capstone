@@ -1,4 +1,3 @@
-// @ts-nocheck
 import Slider from "@react-native-community/slider";
 import { useRouter } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -13,11 +12,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { BarChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/services/supabase";
 import { useRole } from "../../lib/utils/useRole";
 import { useTeam } from "../../lib/utils/useTeam";
-import { BarChart } from "react-native-gifted-charts";
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -57,7 +56,7 @@ export default function CheckInScreen() {
     async function loadCoachView() {
       setCoachLoading(true);
 
-      // 1) athlete membership rows for this coach's team
+      // Load the athletes assigned to this coach's team
       const { data: athletes, error: athletesErr } = await supabase
         .from("team_memberships")
         .select("user_id, role")
@@ -80,7 +79,7 @@ export default function CheckInScreen() {
       const startString = getLocalDateString(startDate);
       const todayString = getLocalDateString(today);
 
-      // 2) recent submitted check-ins for this team (last 7 days)
+      // Pull the last week of check-ins for the coach trend view.
       const { data: checkins, error: checkinsErr } = await supabase
         .from("checkins")
         .select(
@@ -169,7 +168,6 @@ export default function CheckInScreen() {
         .maybeSingle();
 
       if (error) {
-
         setAlreadyCheckedInToday(false);
       } else {
         setAlreadyCheckedInToday(!!data);
@@ -188,7 +186,6 @@ export default function CheckInScreen() {
     day: "numeric",
   });
 
-  // ------------------ Submit ------------------
   const handleSubmit = async () => {
     if (isCoach) return;
     if (!teamId) {
@@ -204,22 +201,13 @@ export default function CheckInScreen() {
       return;
     }
 
-
     try {
       const {
         data: { user },
         error: userErr,
       } = await supabase.auth.getUser();
 
-      if (userErr) {
-        return;
-      }
-
-      if (!user) {
-        return;
-      }
-
-      if (!user || !user.id) {
+      if (userErr || !user?.id) {
         Alert.alert("Login required", "Please log in first.");
         return;
       }
@@ -228,10 +216,10 @@ export default function CheckInScreen() {
         {
           date: getLocalDateString(new Date()),
           hours_of_sleep: parseInt(hoursOfSleep) || 0,
-          sleep_quality: parseInt(sleepQuality) || 0,
-          tiredness: parseInt(tirednessLevel) || 0,
-          soreness: parseInt(sorenessLevel) || 0,
-          mood: parseInt(mood) || 50,
+          sleep_quality: sleepQuality || 0,
+          tiredness: tirednessLevel || 0,
+          soreness: sorenessLevel || 0,
+          mood: mood || 50,
           comments: comments || "",
           user_id: user.id,
           team_id: teamId,
@@ -254,7 +242,6 @@ export default function CheckInScreen() {
     }
   };
 
-  // ------------------ Rating Buttons ------------------
   const RatingButtons = ({ value, onChange }) => (
     <View style={styles.ratingContainer}>
       {[1, 2, 3, 4, 5].map((rating) => (
@@ -281,20 +268,20 @@ export default function CheckInScreen() {
   );
 
   function getPast7Days() {
-  const days = [];
-  const today = new Date();
+    const days = [];
+    const today = new Date();
 
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
 
-    days.push({
-      full: getLocalDateString(d),
-      short: `${d.getMonth() + 1}/${d.getDate()}`,
-    });
-  }
+      days.push({
+        full: getLocalDateString(d),
+        short: `${d.getMonth() + 1}/${d.getDate()}`,
+      });
+    }
 
-  return days;
+    return days;
   }
 
   function buildBarDataForAthlete(checkins, athleteId, metricKey, barColor) {
@@ -339,7 +326,6 @@ export default function CheckInScreen() {
   }
 
   if (isCoach) {  
-
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.header}>
@@ -556,7 +542,6 @@ export default function CheckInScreen() {
       </View>
 
       <ScrollView style={styles.scrollContent}>
-        {/* Hours of Sleep */}
         <View style={styles.section}>
           <Text style={styles.label}>Hours of Sleep</Text>
           <TextInput
@@ -568,25 +553,21 @@ export default function CheckInScreen() {
           />
         </View>
 
-        {/* Sleep Quality */}
         <View style={styles.section}>
           <Text style={styles.label}>Sleep Quality</Text>
           <RatingButtons value={sleepQuality} onChange={setSleepQuality} />
         </View>
 
-        {/* Tiredness */}
         <View style={styles.section}>
           <Text style={styles.label}>Tiredness</Text>
           <RatingButtons value={tirednessLevel} onChange={setTirednessLevel} />
         </View>
 
-        {/* Soreness */}
         <View style={styles.section}>
           <Text style={styles.label}>Soreness</Text>
           <RatingButtons value={sorenessLevel} onChange={setSorenessLevel} />
         </View>
 
-        {/* Mood */}
         <View style={styles.section}>
           <Text style={styles.label}>Mood</Text>
           <Slider
@@ -600,7 +581,6 @@ export default function CheckInScreen() {
           <Text style={styles.moodText}>{mood}</Text>
         </View>
 
-        {/* Comments */}
         <View style={styles.section}>
           <Text style={styles.label}>Comments</Text>
           <TextInput
@@ -612,7 +592,6 @@ export default function CheckInScreen() {
           />
         </View>
 
-        {/* Submit */}
         <View style={styles.submitContainer}>
           {loadingAthleteCheckin ? (
             <Text style={{ color: "#6B7280" }}>Checking today's status...</Text>
