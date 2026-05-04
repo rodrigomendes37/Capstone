@@ -43,3 +43,6 @@ app-example
 /android
 
 .env
+
+# Supabase local/dev files
+supabase/snippets/
