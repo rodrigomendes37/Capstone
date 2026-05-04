@@ -16,15 +16,19 @@ export default function Login() {
   function showError(title: string, error: unknown) {
     const msg =
       error && typeof error === "object" && "message" in error
-        ? String((error as any).message)
+        ? String((error as { message?: unknown }).message)
         : String(error ?? "Unknown error");
 
-    console.log(title, msg, error);
     Alert.alert(title, msg);
     setStatus(`${title}: ${msg}`);
   }
 
   async function handleLogin() {
+    if (!email.trim() || !password) {
+      Alert.alert("Missing information", "Please enter both email and password.");
+      return;
+    }
+
     setStatus("Signing in...");
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -45,6 +49,14 @@ export default function Login() {
   async function handleSignUp() {
     if (!firstName.trim() || !lastName.trim()) {
       Alert.alert("Missing information", "Please enter first and last name.");
+      return;
+    }
+
+    if (!email.trim() || !password) {
+      Alert.alert(
+        "Missing information", 
+        "Please enter email and password."
+      );
       return;
     }
 
